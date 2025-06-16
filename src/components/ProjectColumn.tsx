@@ -74,7 +74,11 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
             </div>
           </div>
           
-          <Droppable droppableId={project.id} type={DROPPABLE_TYPE_TASK}>
+          <Droppable 
+            droppableId={project.id} 
+            type={DROPPABLE_TYPE_TASK}
+            isDropDisabled={false} // Explicitly set isDropDisabled
+          >
             {(providedDroppable: DroppableProvided, snapshotDroppable: DroppableStateSnapshot) => (
               <div
                 ref={providedDroppable.innerRef}
