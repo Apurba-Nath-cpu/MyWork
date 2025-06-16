@@ -75,36 +75,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const fetchBoardData = useCallback(async () => {
-    if (!currentUser) { 
+    if (!currentUser || !currentUser.organization_id) { 
       setBoardData(null); 
       return;
     }
     try {
-      const data = await supabaseService.getBoardData();
+      const data = await supabaseService.getBoardData(currentUser.organization_id);
       setBoardData(data);
     } catch (error) {
       console.error("Failed to fetch board data from Supabase:", error);
-      toast({ title: "Error", description: "Failed to load board data.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to load board data for your organization.", variant: "destructive" });
       setBoardData({ tasks: {}, projects: {}, projectOrder: [] }); 
     }
   }, [currentUser, toast]);
 
   useEffect(() => {
-    fetchBoardData();
-  }, [fetchBoardData]);
+    if (currentUser && currentUser.organization_id) {
+        fetchBoardData();
+    } else {
+        setBoardData(null); // Clear board data if no user or org
+    }
+  }, [currentUser, fetchBoardData]);
 
   useEffect(() => {
+    // Users are already filtered by organization in AuthContext
     setUsersForSuggestions(authContextUsers.map(u => ({ id: u.id, name: u.name, role: u.role })));
   }, [authContextUsers]);
   
   const addProject = useCallback(async (title: string, maintainerIds: string[]) => {
-    if (!currentUser || currentUser.role !== UserRole.ADMIN) {
-        toast({ title: "Permission Denied", description: "Only Admins can create projects.", variant: "destructive" });
+    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
+        toast({ title: "Permission Denied", description: "Only Admins can create projects within their organization.", variant: "destructive" });
         return;
     }
     if (!boardData) return;
     const orderIndex = boardData.projectOrder.length;
-    const newProject = await supabaseService.createProject(title, maintainerIds, orderIndex);
+    const newProject = await supabaseService.createProject(title, maintainerIds, orderIndex, currentUser.organization_id);
     if (newProject) {
       await fetchBoardData(); 
       setShowAddProjectModalState(false);
@@ -115,8 +120,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [boardData, currentUser, fetchBoardData, toast]);
 
   const updateProject = useCallback(async (updatedProject: ProjectColumn) => {
-    if (!currentUser || currentUser.role !== UserRole.ADMIN) { 
-        toast({ title: "Permission Denied", description: "Only Admins can update projects.", variant: "destructive" });
+    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id || updatedProject.organization_id !== currentUser.organization_id) { 
+        toast({ title: "Permission Denied", description: "Only Admins can update projects within their organization.", variant: "destructive" });
         return;
     }
     const success = await supabaseService.updateProject(updatedProject);
@@ -139,10 +144,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     priority: TaskPriority,
     tags: string[]
   ) => {
-    if (!boardData) return;
+    if (!boardData || !currentUser || !currentUser.organization_id) return;
     const project = boardData.projects[projectId];
-    if (!project) {
-        toast({ title: "Error", description: "Project not found. Cannot add task.", variant: "destructive" });
+    if (!project || project.organization_id !== currentUser.organization_id) {
+        toast({ title: "Error", description: "Project not found or does not belong to your organization.", variant: "destructive" });
         return;
     }
 
@@ -163,10 +168,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [boardData, currentUser, fetchBoardData, toast]);
 
   const updateTask = useCallback(async (updatedTask: Task) => {
-    if (!boardData || !currentUser) return;
+    if (!boardData || !currentUser || !currentUser.organization_id) return;
     const project = boardData.projects[updatedTask.projectId];
-    if (!project) {
-        toast({ title: "Error", description: "Project not found for task update.", variant: "destructive" });
+    if (!project || project.organization_id !== currentUser.organization_id) {
+        toast({ title: "Error", description: "Project not found for task update or does not belong to your organization.", variant: "destructive" });
         return;
     }
     const canUpdate = currentUser.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser.id);
@@ -187,13 +192,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [boardData, currentUser, fetchBoardData, toast]);
   
   const _deleteTaskInternal = useCallback(async (taskId: string, projectId: string) => {
-    if (!boardData || !currentUser) {
+    if (!boardData || !currentUser || !currentUser.organization_id) {
       hideConfirmationModal();
       return;
     }
     const project = boardData.projects[projectId];
-    if (!project) {
-      toast({ title: "Error", description: "Project not found for task deletion.", variant: "destructive" });
+    if (!project || project.organization_id !== currentUser.organization_id) {
+      toast({ title: "Error", description: "Project not found for task deletion or not in your org.", variant: "destructive" });
       hideConfirmationModal();
       return;
     }
@@ -215,7 +220,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [boardData, currentUser, fetchBoardData, hideConfirmationModal, toast]);
   
   const _deleteProjectInternal = useCallback(async (projectId: string) => {
-    if (!currentUser || currentUser.role !== UserRole.ADMIN) {
+    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
         toast({ title: "Permission Denied", description: "Only Admins can delete projects.", variant: "destructive" });
         hideConfirmationModal();
         return;
@@ -224,7 +229,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       hideConfirmationModal();
       return;
     }
-    const projectTitle = boardData.projects[projectId]?.title || projectId;
+    const projectToDelete = boardData.projects[projectId];
+    if (!projectToDelete || projectToDelete.organization_id !== currentUser.organization_id) {
+        toast({ title: "Permission Denied", description: "Project not found or not in your org.", variant: "destructive" });
+        hideConfirmationModal();
+        return;
+    }
+    const projectTitle = projectToDelete.title || projectId;
 
     const success = await supabaseService.deleteProject(projectId);
     if (success) {
@@ -265,7 +276,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [boardData, showConfirmationModal, _deleteTaskInternal]);
 
   const moveProject = useCallback(async (projectId: string, newIndex: number) => {
-    if (!boardData) return;
+    if (!boardData || !currentUser || !currentUser.organization_id) return;
+    if (boardData.projects[projectId]?.organization_id !== currentUser.organization_id) return; // Org check
+
     const newProjectOrder = Array.from(boardData.projectOrder);
     const oldIndex = newProjectOrder.indexOf(projectId);
     newProjectOrder.splice(oldIndex, 1);
@@ -278,10 +291,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast({ title: "Error", description: "Failed to save project order.", variant: "destructive" });
       await fetchBoardData(); 
     }
-  }, [boardData, fetchBoardData, toast]);
+  }, [boardData, currentUser, fetchBoardData, toast]);
 
   const moveTaskWithinProject = useCallback(async (projectId: string, taskId: string, newIndex: number) => {
-    if (!boardData || !boardData.projects[projectId]) return;
+    if (!boardData || !boardData.projects[projectId] || !currentUser || !currentUser.organization_id) return;
+    if (boardData.projects[projectId]?.organization_id !== currentUser.organization_id) return; // Org check
     
     const project = boardData.projects[projectId];
     const newTaskIds = Array.from(project.taskIds);
@@ -305,11 +319,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast({ title: "Error", description: "Failed to save task order.", variant: "destructive" });
       await fetchBoardData(); 
     }
-  }, [boardData, fetchBoardData, toast]);
+  }, [boardData, currentUser, fetchBoardData, toast]);
 
   const moveTaskBetweenProjects = useCallback(async (startProjectId: string, finishProjectId: string, taskId: string, newIndexInFinish: number) => {
-    if (!boardData || !boardData.tasks[taskId] || !boardData.projects[startProjectId] || !boardData.projects[finishProjectId]) return;
+    if (!boardData || !boardData.tasks[taskId] || !boardData.projects[startProjectId] || !boardData.projects[finishProjectId] || !currentUser || !currentUser.organization_id) return;
     
+    // Org check for both projects
+    if (boardData.projects[startProjectId]?.organization_id !== currentUser.organization_id || boardData.projects[finishProjectId]?.organization_id !== currentUser.organization_id) return;
+
     const newBoardDataOptimistic = JSON.parse(JSON.stringify(boardData)) as BoardData;
     
     newBoardDataOptimistic.projects[startProjectId].taskIds = newBoardDataOptimistic.projects[startProjectId].taskIds.filter(id => id !== taskId);
@@ -329,7 +346,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast({ title: "Error", description: "Failed to save task move and reorder.", variant: "destructive" });
       await fetchBoardData(); 
     }
-  }, [boardData, fetchBoardData, toast]);
+  }, [boardData, currentUser, fetchBoardData, toast]);
   
   const setShowAddProjectModal = useCallback((show: boolean) => setShowAddProjectModalState(show), []);
   const setShowAddTaskModalForProject = useCallback((projectId: string | null) => {
@@ -358,3 +375,4 @@ export const useData = (): DataContextType => {
   if (context === undefined) throw new Error('useData must be used within a DataProvider');
   return context;
 };
+

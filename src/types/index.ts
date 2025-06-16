@@ -5,12 +5,20 @@ export enum UserRole {
   MEMBER = 'MEMBER',
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  admin_id: string; // User ID of the admin who created the org
+  created_at?: string;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
   avatarUrl?: string;
+  organization_id: string; // Foreign key to organizations table
 }
 
 export enum TaskStatus {
@@ -44,6 +52,7 @@ export interface ProjectColumn {
   title: string;
   taskIds: string[]; // Ordered list of task IDs
   maintainerIds: string[]; // User IDs of maintainers
+  organization_id: string; // Foreign key to organizations table
 }
 
 export interface BoardData {
@@ -70,6 +79,7 @@ export interface UserCreationData {
   name: string;
   email: string;
   role: UserRole;
+  // organization_id will be handled by the context
 }
 
 export interface ConfirmationModalState {
@@ -80,3 +90,4 @@ export interface ConfirmationModalState {
   confirmText?: string;
   cancelText?: string;
 }
+

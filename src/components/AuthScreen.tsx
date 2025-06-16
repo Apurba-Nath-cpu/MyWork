@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, FormEvent, ChangeEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { UserRole } from '../types';
+import { UserRole } from '../types'; // UserRole might not be needed here anymore for signup form
 import { useTheme } from '../contexts/ThemeContext';
 import { APP_TITLE } from '../lib/constants'; 
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 type AuthTab = 'login' | 'signup';
 
 const AuthScreen: React.FC = () => {
-  const { login, signUp } = useAuth();
+  const { login, signUp } = useAuth(); // signUp from context will handle Admin role and org creation
   const { theme } = useTheme();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
@@ -41,7 +41,8 @@ const AuthScreen: React.FC = () => {
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [signupRole, setSignupRole] = useState<UserRole>(UserRole.MEMBER);
+  const [signupOrganizationName, setSignupOrganizationName] = useState(''); // New field
+  // const [signupRole, setSignupRole] = useState<UserRole>(UserRole.MEMBER); // Role is now ADMIN by default for this form
   const [signupAvatarFile, setSignupAvatarFile] = useState<File | null>(null);
   const [signupAvatarPreview, setSignupAvatarPreview] = useState<string | null>(null);
   const [signupError, setSignupError] = useState<string | null>(null);
@@ -52,33 +53,32 @@ const AuthScreen: React.FC = () => {
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoginError(null);
+    setLoginLoading(true);
     if (!loginEmail.trim() || !loginPassword.trim()) {
       setLoginError("Email and Password are required.");
+      setLoginLoading(false);
       return;
     }
     if (!validateEmail(loginEmail)) {
       setLoginError("Please enter a valid email address.");
+      setLoginLoading(false);
       return;
     }
-    // setLoginLoading(true);
     const result = await login(loginEmail, loginPassword);
     if (!result.success) {
       const errorMessage = result.error || "Login failed. Please check your credentials.";
       setLoginError(errorMessage);
-      // toast({
-      //   title: "Login Failed",
-      //   description: errorMessage,
-      //   variant: "destructive",
-      // });
     }
-    // setLoginLoading(false);
+    setLoginLoading(false);
   };
 
   const handleSignup = async (e: FormEvent) => {
     e.preventDefault();
     setSignupError(null);
+    setSignupLoading(true);
     let errors: string[] = [];
     if (!signupName.trim()) errors.push("Full Name is required.");
+    if (!signupOrganizationName.trim()) errors.push("Organization Name is required."); // Validation for new field
     if (!signupEmail.trim()) errors.push("Email is required.");
     else if (!validateEmail(signupEmail)) errors.push("Please enter a valid email address.");
     if (!signupPassword.trim()) errors.push("Password is required.");
@@ -92,11 +92,12 @@ const AuthScreen: React.FC = () => {
         description: combinedError,
         variant: "destructive",
       });
+      setSignupLoading(false);
       return;
     }
 
-    setSignupLoading(true);
-    const result = await signUp(signupEmail, signupPassword, signupName, signupRole, signupAvatarFile || undefined);
+    // Role is implicitly ADMIN when signing up through this form
+    const result = await signUp(signupEmail, signupPassword, signupName, signupOrganizationName, signupAvatarFile || undefined);
     if (!result.success) {
       const errorMessage = result.error || "Sign up failed. Please try again.";
       setSignupError(errorMessage);
@@ -108,15 +109,17 @@ const AuthScreen: React.FC = () => {
     } else {
       toast({
         title: "Sign Up Successful!",
-        description: "Account created. If email confirmation is required, please check your inbox.",
+        description: "Account and Organization created. If email confirmation is required, please check your inbox.",
       });
       setSignupName('');
       setSignupEmail('');
       setSignupPassword('');
-      setSignupRole(UserRole.MEMBER);
+      setSignupOrganizationName('');
+      // setSignupRole(UserRole.MEMBER); // Not needed
       setSignupAvatarFile(null);
       setSignupAvatarPreview(null);
       setSignupError(null); 
+      // User will be redirected by AuthContext on successful login after signup
     }
     setSignupLoading(false);
   };
@@ -127,7 +130,6 @@ const AuthScreen: React.FC = () => {
       if (file.size > 2 * 1024 * 1024) { 
         const errorMsg = "Avatar image must be less than 2MB.";
         setSignupError(errorMsg);
-        // toast({ title: "Upload Error", description: errorMsg, variant: "destructive" });
         setSignupAvatarFile(null);
         setSignupAvatarPreview(null);
         e.target.value = ''; 
@@ -165,7 +167,7 @@ const AuthScreen: React.FC = () => {
             onClick={() => { setActiveTab('signup'); setLoginError(null); setSignupError(null);}}
             className={`${tabButtonBaseClass} rounded-tr-xl ${activeTab === 'signup' ? activeTabClass : inactiveTabClass}`}
           >
-            Sign Up
+            Create Organization
           </button>
         </div>
 
@@ -192,36 +194,33 @@ const AuthScreen: React.FC = () => {
 
           {activeTab === 'signup' && (
             <>
-              <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Create Your Account</h2>
+              <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Create Admin Account & Organization</h2>
               {signupError && <p className={errorBoxClass}>{signupError}</p>}
               <form onSubmit={handleSignup} className="space-y-4 sm:space-y-5">
                 <div>
-                  <label htmlFor="signupName" className={currentLabelClass}>Full Name</label>
+                  <label htmlFor="signupName" className={currentLabelClass}>Your Full Name (Admin)</label>
                   <input type="text" id="signupName" value={signupName} onChange={(e) => setSignupName(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Your Name" aria-required="true" />
                 </div>
                 <div>
-                  <label htmlFor="signupEmail" className={currentLabelClass}>Email Address</label>
+                  <label htmlFor="signupOrganizationName" className={currentLabelClass}>Organization Name</label>
+                  <input type="text" id="signupOrganizationName" value={signupOrganizationName} onChange={(e) => setSignupOrganizationName(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Your Company or Team Name" aria-required="true" />
+                </div>
+                <div>
+                  <label htmlFor="signupEmail" className={currentLabelClass}>Your Email Address (Admin)</label>
                   <input type="email" id="signupEmail" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="you@example.com" aria-required="true" />
                 </div>
                 <div>
-                  <label htmlFor="signupPassword" className={currentLabelClass}>Password</label>
+                  <label htmlFor="signupPassword" className={currentLabelClass}>Password (Admin)</label>
                   <input type="password" id="signupPassword" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Min. 6 characters" aria-required="true" />
                 </div>
-                <div>
-                  <label htmlFor="signupRole" className={currentLabelClass}>I am a...</label>
-                  <select id="signupRole" value={signupRole} onChange={(e) => setSignupRole(e.target.value as UserRole)} className={`${inputBaseClass} ${currentInputClass}`}>
-                    {Object.values(UserRole).map(role => (
-                      <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()}</option>
-                    ))}
-                  </select>
-                </div>
+                {/* Role selection is removed - user signing up here is always ADMIN */}
                 <div>
                   <label htmlFor="signupAvatar" className={currentLabelClass}>Profile Picture (Optional, &lt;2MB)</label>
                   <input type="file" id="signupAvatar" onChange={handleAvatarChange} accept="image/png, image/jpeg, image/gif" className={`block w-full text-xs sm:text-sm file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold ${theme === 'dark' ? 'text-neutral-400 file:bg-primary-600 file:text-white hover:file:bg-primary-700' : 'text-neutral-600 file:bg-primary-100 file:text-primary-700 hover:file:bg-primary-200'}`} />
                   {signupAvatarPreview && <img src={signupAvatarPreview} alt="Avatar preview" className="mt-3 w-20 h-20 rounded-full object-cover mx-auto shadow-md" />}
                 </div>
                 <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={signupLoading}>
-                  {signupLoading ? 'Creating Account...' : 'Create Account'}
+                  {signupLoading ? 'Creating Account...' : 'Create Account & Organization'}
                 </button>
               </form>
             </>
@@ -236,5 +235,4 @@ const AuthScreen: React.FC = () => {
 };
 
 export default AuthScreen;
-
     
