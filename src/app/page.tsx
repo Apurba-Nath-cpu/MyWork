@@ -151,7 +151,7 @@ const HomePage: React.FC = () => {
               <div
                 {...provided.droppableProps}
                 ref={provided.innerRef}
-                className={`flex space-x-4 items-start pb-4 min-h-[calc(100vh-10rem)] ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800 dragging-over' : ''}`}
+                className={`flex space-x-4 items-start pb-4 ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800 dragging-over' : ''}`}
               >
                 {boardData.projectOrder.map((projectId: string, index: number) => {
                   const project: ProjectColumn | undefined = boardData.projects[projectId];
