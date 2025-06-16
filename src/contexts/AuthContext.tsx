@@ -1,7 +1,7 @@
 
 "use client";
-import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect, useRef } from 'react';
-import { type User, UserRole } from '../types'; // Changed to import UserRole as a value
+import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
+import { type User, UserRole } from '../types';
 import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import type { SignUpError } from '../services/supabaseService'; // Import the custom error types
@@ -25,14 +25,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [supabaseUser, setSupabaseUser] = useState<SupabaseAuthUser | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const loadingAuthRef = useRef(loadingAuth); // Ref to track loadingAuth state
 
   useEffect(() => {
-    loadingAuthRef.current = loadingAuth;
-  }, [loadingAuth]);
-
-  useEffect(() => {
-    setLoadingAuth(true);
+    setLoadingAuth(true); // Set loading to true initially
     const { data: authListener } = supabaseService.onAuthStateChange(
       async (_event: string, session: Session | null) => {
         try {
@@ -52,21 +47,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("Error processing auth state change:", error);
             setCurrentUser(null); // Ensure clean state on error
         } finally {
-            setLoadingAuth(false);
+            setLoadingAuth(false); // Set loading to false once auth state is determined
         }
       }
     );
 
-     supabaseService.getSession().then(({ data: { session } }) => {
-      if (!session && loadingAuthRef.current) {
-        setLoadingAuth(false);
-      }
-    });
-
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Empty dependency array is correct for the main setup effect
 
   const fetchPublicUsers = useCallback(async () => {
     const fetchedUsers = await supabaseService.getUsers();
@@ -77,12 +66,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (currentUser?.role === UserRole.ADMIN) {
       fetchPublicUsers();
     } else {
-      // If user is not admin, ensure they only see themselves if needed, or an empty list
-      // For suggestions, it might be better to have all users if permissions allow reading all names/ids
-      // Or fetch only relevant users based on context (e.g., project members)
-      // For now, clearing or setting to self if not admin.
-      // setUsers(currentUser ? [currentUser] : []); // Example: only self if not admin
-      setUsers([]); // Or empty if non-admins shouldn't list users
+      setUsers([]);
     }
   }, [currentUser, fetchPublicUsers]);
 
@@ -118,14 +102,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log('Sign up successful, user state will be updated by onAuthStateChange.');
       }
     }
-    // setLoadingAuth will be handled by onAuthStateChange.
     return { success: true };
   }, []);
 
   const logout = useCallback(async () => {
     setLoadingAuth(true);
     await supabaseService.signOutUser();
-    // onAuthStateChange will handle setting currentUser to null and setLoadingAuth to false
   }, []);
 
   const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean}> => {
@@ -136,13 +118,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const result = await supabaseService.createUserAccount(name, email, role);
     if (result.user) {
       setUsers(prevUsers => [...prevUsers, result.user!].sort((a,b) => a.name.localeCompare(b.name)));
-      alert(`User profile for ${name} created successfully in public.users.`);
+      // Toast notification for success is now in CreateUserModal
       return { success: true, user: result.user };
     } else {
+      // Toast notification for error is now in CreateUserModal
       const errorMessage = result.error?.isEmailConflict ? "Email already in use." : (result.error?.message || `Failed to create user profile for ${name}.`);
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict };
     }
-  }, [currentUser]);
+  }, [currentUser]); // Removed fetchPublicUsers, as setUsers is updated directly
 
   return (
     <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, createUser, fetchPublicUsers }}>
