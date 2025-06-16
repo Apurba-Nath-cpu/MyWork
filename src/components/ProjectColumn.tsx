@@ -79,6 +79,7 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
             type={DROPPABLE_TYPE_TASK}
             isDropDisabled={false} 
             isCombineEnabled={false} 
+            ignoreContainerClipping={false}
           >
             {(providedDroppable: DroppableProvided, snapshotDroppable: DroppableStateSnapshot) => (
               <div
@@ -116,3 +117,4 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
 };
 
 export default ProjectColumnComponent;
+
