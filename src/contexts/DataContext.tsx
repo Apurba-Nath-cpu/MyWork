@@ -59,8 +59,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const fetchBoardData = useCallback(async () => {
-    if (!currentUser) { // Do not fetch if no user is logged in
-      setBoardData(null); // Clear board data if user logs out
+    if (!currentUser) { 
+      setBoardData(null); 
       return;
     }
     try {
@@ -68,7 +68,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setBoardData(data);
     } catch (error) {
       console.error("Failed to fetch board data from Supabase:", error);
-      setBoardData({ tasks: {}, projects: {}, projectOrder: [] }); // Fallback
+      setBoardData({ tasks: {}, projects: {}, projectOrder: [] }); 
     }
   }, [currentUser]);
 
@@ -156,14 +156,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [boardData, currentUser, fetchBoardData]);
 
+  const hideConfirmationModal = useCallback(() => {
+    setConfirmationModalState(prev => ({ ...prev, isOpen: false, onConfirmAction: null }));
+  }, []);
+
   const _deleteTaskInternal = useCallback(async (taskId: string, projectId: string) => {
-    if (!boardData || !currentUser) return;
+    if (!boardData || !currentUser) {
+      hideConfirmationModal();
+      return;
+    }
     const project = boardData.projects[projectId];
-    if (!project) return;
+    if (!project) {
+      hideConfirmationModal();
+      return;
+    }
     
     const canDelete = currentUser.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser.id);
     if (!canDelete) {
         alert("You do not have permission to delete tasks in this project.");
+        hideConfirmationModal();
         return;
     }
     const success = await supabaseService.deleteTask(taskId);
@@ -173,14 +184,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         alert(`Failed to delete task from Supabase.`);
     }
     hideConfirmationModal();
-  }, [boardData, currentUser, fetchBoardData, hideConfirmationModal]); // Added hideConfirmationModal
+  }, [boardData, currentUser, fetchBoardData, hideConfirmationModal]);
   
   const _deleteProjectInternal = useCallback(async (projectId: string) => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) {
         alert("Only Admins can delete projects.");
+        hideConfirmationModal();
         return;
     }
-    if (!boardData) return;
+    if (!boardData) {
+      hideConfirmationModal();
+      return;
+    }
     const projectTitle = boardData.projects[projectId]?.title || projectId;
 
     const success = await supabaseService.deleteProject(projectId);
@@ -190,21 +205,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         alert(`Failed to delete project "${projectTitle}" from Supabase.`);
     }
     hideConfirmationModal();
-  }, [currentUser, boardData, fetchBoardData, hideConfirmationModal]); // Added hideConfirmationModal
+  }, [currentUser, boardData, fetchBoardData, hideConfirmationModal]);
 
   const showConfirmationModal = useCallback((title: string, message: string, onConfirmAction: () => void, confirmText = 'Confirm', cancelText = 'Cancel') => {
     setConfirmationModalState({ isOpen: true, title, message, onConfirmAction, confirmText, cancelText });
   }, []);
 
-  const hideConfirmationModal = useCallback(() => {
-    setConfirmationModalState(prev => ({ ...prev, isOpen: false, onConfirmAction: null }));
-  }, []);
-
   const handleConfirmDeletion = useCallback(() => {
     if (confirmationModalState.onConfirmAction) {
-      confirmationModalState.onConfirmAction(); // This will call _deleteTaskInternal or _deleteProjectInternal
+      confirmationModalState.onConfirmAction();
     }
-    // hideConfirmationModal(); // The internal delete functions now call this
   }, [confirmationModalState]);
 
   const requestProjectDeletion = useCallback((projectId: string) => {
@@ -271,19 +281,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const moveTaskBetweenProjects = useCallback(async (startProjectId: string, finishProjectId: string, taskId: string, newIndexInFinish: number) => {
     if (!boardData || !boardData.tasks[taskId] || !boardData.projects[startProjectId] || !boardData.projects[finishProjectId]) return;
     
-    // Create a deep copy for optimistic update
     const newBoardDataOptimistic = JSON.parse(JSON.stringify(boardData)) as BoardData;
     
-    // Remove from old project
     newBoardDataOptimistic.projects[startProjectId].taskIds = newBoardDataOptimistic.projects[startProjectId].taskIds.filter(id => id !== taskId);
     
-    // Add to new project
     newBoardDataOptimistic.projects[finishProjectId].taskIds.splice(newIndexInFinish, 0, taskId);
     newBoardDataOptimistic.tasks[taskId] = { ...newBoardDataOptimistic.tasks[taskId], projectId: finishProjectId };
 
     setBoardData(newBoardDataOptimistic);
 
-    // Persist changes
     const finalTaskIdsInFinishProject = newBoardDataOptimistic.projects[finishProjectId].taskIds;
     const successMove = await supabaseService.updateTaskProjectAndOrder(taskId, finishProjectId, finalTaskIdsInFinishProject);
     
@@ -292,7 +298,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (!successMove || !successOldOrder) {
       alert("Failed to save task move and reorder to Supabase.");
-      await fetchBoardData(); // Revert
+      await fetchBoardData(); 
     }
   }, [boardData, fetchBoardData]);
   
@@ -323,3 +329,4 @@ export const useData = (): DataContextType => {
   if (context === undefined) throw new Error('useData must be used within a DataProvider');
   return context;
 };
+

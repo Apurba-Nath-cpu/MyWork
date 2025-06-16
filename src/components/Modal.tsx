@@ -35,11 +35,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
       aria-modal="true"
       aria-labelledby="modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity duration-300 ease-in-out"
-      onClick={onClose} // Close on overlay click
+      onClick={onClose} 
     >
       <div
         className="bg-white dark:bg-neutral-800 p-6 rounded-lg shadow-xl w-full max-w-md m-4 transform transition-all duration-300 ease-in-out scale-100"
-        onClick={(e) => e.stopPropagation()} // Prevent modal close when clicking inside modal content
+        onClick={(e) => e.stopPropagation()} 
       >
         <div className="flex justify-between items-center mb-4">
           <h2 id="modal-title" className="text-xl font-semibold text-neutral-800 dark:text-neutral-100">

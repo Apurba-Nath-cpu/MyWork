@@ -1,5 +1,6 @@
 
-import type { UserRole, User, BoardData } from '../types';
+import type { User, BoardData } from '../types';
+import { UserRole } from '../types';
 
 export const APP_TITLE = "ProjectFlow";
 
@@ -32,3 +33,4 @@ export const INITIAL_BOARD_DATA: BoardData = {
 
 export const DROPPABLE_TYPE_PROJECT = "PROJECT";
 export const DROPPABLE_TYPE_TASK = "TASK";
+
