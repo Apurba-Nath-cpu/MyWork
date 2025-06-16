@@ -102,7 +102,14 @@ const HomePage: React.FC = () => {
       <Navbar />
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex-grow p-4 overflow-x-auto overflow-y-hidden"> 
-          <Droppable droppableId="all-projects" direction="horizontal" type={DROPPABLE_TYPE_PROJECT}>
+          <Droppable 
+            droppableId="all-projects" 
+            direction="horizontal" 
+            type={DROPPABLE_TYPE_PROJECT}
+            isDropDisabled={false}
+            isCombineEnabled={false}
+            ignoreContainerClipping={false}
+          >
             {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
               <div
                 {...provided.droppableProps}
@@ -155,3 +162,4 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
+
