@@ -1,23 +1,11 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { type User, UserRole, type Organization } from '../types';
+import { type User, UserRole, type Organization, type AuthContextType } from '../types';
 import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
-import type { SignUpError, CreateUserAccountError } from '../types'; // Use extended types
+import type { SignUpError, CreateUserAccountError } from '../types'; 
 import { useToast } from "@/hooks/use-toast";
-
-interface AuthContextType {
-  currentUser: User | null;
-  supabaseUser: SupabaseAuthUser | null;
-  users: User[]; // Users within the current user's organization
-  loadingAuth: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }>;
-  logout: () => Promise<void>;
-  createUser: (name: string, email: string, role: UserRole) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}>;
-  fetchPublicUsers: () => Promise<void>; 
-}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -42,7 +30,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!userProfile) {
               console.warn(`No profile found in public.users for authenticated user ID: ${authUserFromSession.id}.`);
             } else {
-              if (userProfile.organization_id) { // Fetch users if user has an org_id
+              if (userProfile.organization_id) { 
                 await fetchPublicUsers(userProfile.organization_id);
               } else {
                 setUsers([]); 
@@ -69,7 +57,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchPublicUsers = useCallback(async (organizationId?: string) => {
     const orgIdToFetch = organizationId || currentUser?.organization_id;
-    if (orgIdToFetch) { // Fetch users if there's an org ID, regardless of current user's role
+    if (orgIdToFetch) { 
         const fetchedUsers = await supabaseService.getUsers(orgIdToFetch);
         setUsers(fetchedUsers);
     } else {
@@ -99,10 +87,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
     
-    // User will be logged in by onAuthStateChange
-    // Toast notification depends on email confirmation status
     const { data: sessionData } = await supabaseService.getSession();
-    if (!result.user.email_confirmed_at && sessionData.session === null) {
+    if (!result.user.email_confirmed_at && sessionData.session === null) { // Using result.user here (SupabaseAuthUser)
         toast({
             title: "Sign Up Successful!",
             description: "Please check your email to confirm your account.",
@@ -145,8 +131,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [currentUser, toast]);
 
+  const deleteUserByAdmin = useCallback(async (userIdToDelete: string): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
+      const msg = "Only Admins can delete users.";
+      toast({ title: "Permission Denied", description: msg, variant: "destructive" });
+      return { success: false, error: msg };
+    }
+    if (userIdToDelete === currentUser.id) {
+      const msg = "You cannot delete your own account using this function.";
+      toast({ title: "Action Not Allowed", description: msg, variant: "destructive" });
+      return { success: false, error: msg };
+    }
+
+    const result = await supabaseService.deleteUserByAdmin(userIdToDelete, currentUser.id, currentUser.organization_id);
+
+    if (result.success) {
+      setUsers(prevUsers => prevUsers.filter(user => user.id !== userIdToDelete));
+      toast({ title: "User Deleted", description: `User profile has been deleted. Note: The user's authentication entry might still exist and require manual cleanup by a Supabase project admin if direct auth deletion failed.` });
+      return { success: true };
+    } else {
+      toast({ title: "Error Deleting User", description: result.error?.message || "Could not delete user profile.", variant: "destructive" });
+      return { success: false, error: result.error?.message };
+    }
+  }, [currentUser, toast]);
+
+
   return (
-    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, createUser, fetchPublicUsers }}>
+    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, createUser, deleteUserByAdmin, fetchPublicUsers }}>
       {children}
     </AuthContext.Provider>
   );

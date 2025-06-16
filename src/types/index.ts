@@ -103,3 +103,19 @@ export interface CreateUserAccountError extends PostgrestError {
   isEmailConflict?: boolean;
   isUsernameConflictInOrg?: boolean; // For username conflict within the same organization
 }
+
+// For AuthContext
+import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
+
+export interface AuthContextType {
+  currentUser: User | null;
+  supabaseUser: SupabaseAuthUser | null;
+  users: User[]; 
+  loadingAuth: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }>;
+  logout: () => Promise<void>;
+  createUser: (name: string, email: string, role: UserRole) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}>;
+  deleteUserByAdmin: (userIdToDelete: string) => Promise<{ success: boolean; error?: string }>;
+  fetchPublicUsers: () => Promise<void>; 
+}

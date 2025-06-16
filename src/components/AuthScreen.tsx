@@ -3,15 +3,16 @@
 import React, { useState, FormEvent, ChangeEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types'; 
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme, Theme } from '../contexts/ThemeContext';
 import { APP_TITLE } from '../lib/constants'; 
 import { useToast } from "@/hooks/use-toast";
+import { SunIcon, MoonIcon } from './custom-icons';
 
 type AuthTab = 'login' | 'signup';
 
 const AuthScreen: React.FC = () => {
   const { login, signUp } = useAuth(); 
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
 
@@ -98,8 +99,11 @@ const AuthScreen: React.FC = () => {
     const result = await signUp(signupEmail, signupPassword, signupName, signupOrganizationName, signupAvatarFile || undefined);
     if (!result.success) {
       let errorMessage = result.error || "Sign up failed. Please try again.";
-      // Specific error messages are now handled by AuthContext which passes them back.
-      // signUp in AuthContext sets more detailed error messages.
+       if (result.isOrgNameConflict) {
+        errorMessage = "This organization name is already taken. Please choose a different one.";
+      } else if (result.isEmailConflict) {
+        errorMessage = "This email is already registered. Please try logging in or use a different email.";
+      }
       setSignupError(errorMessage); 
       toast({
         title: "Sign Up Failed",
@@ -107,7 +111,6 @@ const AuthScreen: React.FC = () => {
         variant: "destructive",
       });
     } else {
-      // Toast for success is handled in AuthContext now, based on email confirmation status
       setSignupName('');
       setSignupEmail('');
       setSignupPassword('');
@@ -144,7 +147,26 @@ const AuthScreen: React.FC = () => {
   };
   
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'dark bg-neutral-900' : 'bg-neutral-50'} transition-colors duration-300`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'dark bg-neutral-900' : 'bg-neutral-50'} transition-colors duration-300 relative`}>
+      <div className="absolute top-4 right-4 z-10">
+        <button
+          onClick={toggleTheme}
+          className={`p-2 rounded-full focus:outline-none focus:ring-2 transition-colors ${
+            theme === Theme.DARK
+              ? 'text-yellow-400 hover:bg-neutral-700 focus:ring-yellow-500'
+              : 'text-neutral-600 hover:bg-neutral-200 focus:ring-primary-500'
+          }`}
+          title={theme === Theme.LIGHT ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          aria-label={theme === Theme.LIGHT ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+        >
+          {theme === Theme.LIGHT ? (
+            <MoonIcon className="w-5 h-5" />
+          ) : (
+            <SunIcon className="w-5 h-5" />
+          )}
+        </button>
+      </div>
+      
       <div className="mb-6 sm:mb-8 text-center">
         <h1 className={`text-3xl sm:text-4xl font-bold ${theme === 'dark' ? 'text-primary-400' : 'text-primary-600'}`}>{APP_TITLE}</h1>
         <p className={`mt-1 sm:mt-2 text-sm ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-600'}`}>Organize your projects, streamline your workflow.</p>

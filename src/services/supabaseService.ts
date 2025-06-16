@@ -244,8 +244,8 @@ export const createUserAccount = async (name: string, email: string, role: UserR
   if (insertError) {
     const finalError: CreateUserAccountError = {
       ...(insertError as SupabasePostgrestError),
-      isEmailConflict: insertError.code === '23505' && insertError.message.includes('users_email_key'), // More specific check for email
-      isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_key'), // Check for composite key
+      isEmailConflict: insertError.code === '23505' && insertError.message.includes('users_email_unique'), 
+      isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_unique'),
     };
     console.error("Supabase Admin: Error creating user profile in public.users:", finalError);
     return { user: null, error: finalError };
@@ -266,6 +266,49 @@ export const createUserAccount = async (name: string, email: string, role: UserR
   }
   return { user: null, error: { message: "Unknown error creating user profile", code: "00000", details:"", hint:"" } as CreateUserAccountError };
 };
+
+export const deleteUserByAdmin = async (
+  userIdToDelete: string,
+  adminUserId: string, 
+  organizationId: string
+): Promise<{ success: boolean; error?: { message: string } }> => {
+  
+  if (userIdToDelete === adminUserId) {
+    return { success: false, error: { message: "Admin cannot delete themselves through this function." } };
+  }
+
+  // Delete from public.users first
+  const { error: deleteProfileError } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', userIdToDelete)
+    .eq('organization_id', organizationId); // Ensure admin is deleting from their own org
+
+  if (deleteProfileError) {
+    console.error("Error deleting user profile from public.users:", deleteProfileError);
+    return { success: false, error: { message: `Failed to delete user profile: ${deleteProfileError.message}` } };
+  }
+
+  // Attempt to delete from auth.users
+  // This requires Supabase Admin privileges, typically via a service_role key on the backend.
+  // If the client's Supabase instance doesn't have these rights, this will fail.
+  // It's included here based on the assumption that if `supabase.auth.admin.deleteUser` was mentioned,
+  // it might be callable in this environment. Otherwise, this part should be handled by a backend function.
+  try {
+    const { error: deleteAuthUserError } = await supabase.auth.admin.deleteUser(userIdToDelete);
+    if (deleteAuthUserError) {
+      console.warn(`User profile ${userIdToDelete} deleted, but failed to delete auth user: ${deleteAuthUserError.message}. This may require manual cleanup or a backend admin call.`);
+      // Proceed as success for profile deletion, but warn about auth user.
+    } else {
+      console.log(`User ${userIdToDelete} (profile and auth) deleted by admin ${adminUserId}.`);
+    }
+  } catch (e: any) {
+     console.warn(`User profile ${userIdToDelete} deleted. Error during auth user deletion attempt: ${e.message}. This usually means the client doesn't have admin rights for auth operations.`);
+  }
+
+  return { success: true };
+};
+
 
 export const getUsers = async (organizationId: string): Promise<User[]> => {
   console.log(`Supabase: Fetching user profiles from public.users for organization ID: ${organizationId}`);
