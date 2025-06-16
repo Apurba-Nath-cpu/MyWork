@@ -13,6 +13,20 @@ export interface User {
   avatarUrl?: string;
 }
 
+export enum TaskStatus {
+  TODO = 'To Do',
+  IN_PROGRESS = 'In Progress',
+  DONE = 'Done',
+  BLOCKED = 'Blocked',
+}
+
+export enum TaskPriority {
+  P0 = 'P0 - Critical',
+  P1 = 'P1 - High',
+  P2 = 'P2 - Medium',
+  P3 = 'P3 - Low',
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -20,25 +34,16 @@ export interface Task {
   assigneeIds: string[]; // User IDs
   eta: string; // ISO date string or human-readable
   projectId: string;
-  // Fields from TaskFlow that are not in this new types.ts, but were in old one
-  deadline?: string; 
-  importance?: TaskImportance; // Need TaskImportance if used
-  emoji?: string;
-  priorityScore?: number;
-  reason?: string;
-  order?: number; // For maintaining order within a column
+  status: TaskStatus;
+  priority: TaskPriority;
+  tags: string[];
 }
-
-// Added from original TaskFlow types
-export type TaskImportance = 'low' | 'medium' | 'high';
-
 
 export interface ProjectColumn {
   id: string; // Project ID
   title: string;
   taskIds: string[]; // Ordered list of task IDs
   maintainerIds: string[]; // User IDs of maintainers
-  // order?: number; // Not in user provided type, but common for column ordering
 }
 
 export interface BoardData {

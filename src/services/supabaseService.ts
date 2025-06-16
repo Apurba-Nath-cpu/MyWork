@@ -1,6 +1,6 @@
 
 import { createClient, type SupabaseClient, type Session, type User as SupabaseAuthUser, type AuthError, type PostgrestError } from '@supabase/supabase-js';
-import type { BoardData, ProjectColumn, Task, User, UserRole } from '../types';
+import { type BoardData, type ProjectColumn, type Task, type User, UserRole, TaskStatus, TaskPriority } from '../types';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -249,7 +249,7 @@ export const getBoardData = async (): Promise<BoardData> => {
 
   const { data: tasksData, error: tasksError } = await supabase
     .from('tasks')
-    .select('*')
+    .select('*') 
     .order('project_id') 
     .order('order_index');
 
@@ -283,15 +283,15 @@ export const getBoardData = async (): Promise<BoardData> => {
       description: task.description,
       assigneeIds: task.assignee_ids || [],
       eta: task.eta,
+      status: task.status as TaskStatus || TaskStatus.TODO,
+      priority: task.priority as TaskPriority || TaskPriority.P2,
+      tags: task.tags || [],
     };
     if (boardData.projects[task.project_id]) {
       boardData.projects[task.project_id].taskIds.push(task.id);
     }
   });
   
-  // Ensure tasks within each project are sorted by their order_index
-  // This should ideally be handled by the DB query `order('project_id, order_index')`
-  // but we can double-check here.
   for (const projectId in boardData.projects) {
     const projectTasks = (tasksData || []).filter(t => t.project_id === projectId)
                                      .sort((a,b) => a.order_index - b.order_index);
@@ -329,7 +329,6 @@ export const updateProject = async (updatedProject: ProjectColumn): Promise<bool
     .update({ 
       title: updatedProject.title, 
       maintainer_ids: updatedProject.maintainerIds 
-      // taskIds and order_index are handled separately
     })
     .eq('id', updatedProject.id);
 
@@ -342,8 +341,6 @@ export const updateProject = async (updatedProject: ProjectColumn): Promise<bool
 
 export const deleteProject = async (projectId: string): Promise<boolean> => {
   console.log("Supabase: Deleting project", projectId);
-  // Note: RLS policies should handle cascading deletes of tasks if set up,
-  // otherwise tasks might need to be deleted manually or via a DB function.
   const { error } = await supabase.from('projects').delete().eq('id', projectId);
   if (error) {
     console.error("Error deleting project:", error);
@@ -352,15 +349,28 @@ export const deleteProject = async (projectId: string): Promise<boolean> => {
   return true;
 };
 
-export const createTask = async (projectId: string, title: string, description: string | undefined, assigneeIds: string[], eta: string | undefined, orderIndex: number): Promise<Task | null> => {
-  console.log("Supabase: Creating task", { projectId, title, orderIndex });
+export const createTask = async (
+  projectId: string, 
+  title: string, 
+  description: string | undefined, 
+  assigneeIds: string[], 
+  eta: string | undefined, 
+  orderIndex: number,
+  status: TaskStatus,
+  priority: TaskPriority,
+  tags: string[]
+): Promise<Task | null> => {
+  console.log("Supabase: Creating task", { projectId, title, orderIndex, status, priority, tags });
   const taskToInsert = { 
       project_id: projectId, 
       title, 
       description: description || null, 
       assignee_ids: assigneeIds.length > 0 ? assigneeIds : null, 
       eta: eta || null, 
-      order_index: orderIndex 
+      order_index: orderIndex,
+      status: status,
+      priority: priority,
+      tags: tags.length > 0 ? tags : null,
   };
 
   const { data, error } = await supabase
@@ -381,7 +391,9 @@ export const createTask = async (projectId: string, title: string, description: 
     description: data.description,
     assigneeIds: data.assignee_ids || [],
     eta: data.eta,
-    // order: data.order_index // Assuming type Task has order property
+    status: data.status as TaskStatus,
+    priority: data.priority as TaskPriority,
+    tags: data.tags || [],
   };
 };
 
@@ -395,7 +407,9 @@ export const updateTask = async (updatedTask: Task): Promise<boolean> => {
       assignee_ids: updatedTask.assigneeIds.length > 0 ? updatedTask.assigneeIds : null,
       eta: updatedTask.eta || null,
       project_id: updatedTask.projectId,
-      // order_index is handled by specific reordering functions
+      status: updatedTask.status,
+      priority: updatedTask.priority,
+      tags: updatedTask.tags.length > 0 ? updatedTask.tags : null,
     })
     .eq('id', updatedTask.id);
 
@@ -422,8 +436,6 @@ export const updateProjectOrder = async (projectOrder: string[]): Promise<boolea
     supabase.from('projects').update({ order_index: index }).eq('id', projectId)
   );
   try {
-    // Supabase recommends batching, but for simplicity, Promise.all is used.
-    // For large numbers of projects, consider a stored procedure or fewer calls.
     const results = await Promise.all(updates);
     for (const res of results) {
       if (res.error) throw res.error;
@@ -477,7 +489,6 @@ export const updateTaskProjectAndOrder = async (
   }
 
   // Step 2: Re-order all tasks in the new project (including the moved one) to ensure consistency.
-  // This loop ensures every task in the new list has its correct order_index.
   const newProjectOrderUpdates = newTaskIdsInNewProject.map((id, index) =>
     supabase.from('tasks').update({ order_index: index }).eq('id', id).eq('project_id', newProjectId)
   );
@@ -485,16 +496,12 @@ export const updateTaskProjectAndOrder = async (
   try {
     const results = await Promise.all(newProjectOrderUpdates);
     for (const res of results) {
-      if (res.error) throw res.error; // If any individual update fails, throw to catch block
+      if (res.error) throw res.error; 
     }
     console.log(`Successfully updated order for all tasks in project ${newProjectId}.`);
     return true;
   } catch (error) {
     console.error(`Error finalizing task order in new project ${newProjectId} after move:`, error);
-    // Potentially try to revert the task's project_id change if this fails, though that adds complexity.
     return false;
   }
 };
-
-
-    

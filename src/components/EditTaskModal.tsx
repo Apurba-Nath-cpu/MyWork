@@ -4,7 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Task, UserRole } from '../types';
+import { Task, UserRole, TaskStatus, TaskPriority } from '../types';
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface EditTaskModalProps {
   task: Task;
@@ -18,7 +23,10 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
   const [description, setDescription] = useState(task.description || '');
   const [assigneeIds, setAssigneeIds] = useState<string[]>(task.assigneeIds);
   const [eta, setEta] = useState(task.eta || '');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [status, setStatus] = useState<TaskStatus>(task.status || TaskStatus.TODO);
+  const [priority, setPriority] = useState<TaskPriority>(task.priority || TaskPriority.P2);
+  const [tagsString, setTagsString] = useState(task.tags?.join(', ') || '');
+  const [assigneeSearchTerm, setAssigneeSearchTerm] = useState('');
 
   const project = boardData?.projects[task.projectId];
 
@@ -27,7 +35,10 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
     setDescription(task.description || '');
     setAssigneeIds(task.assigneeIds);
     setEta(task.eta || '');
-    setSearchTerm('');
+    setStatus(task.status || TaskStatus.TODO);
+    setPriority(task.priority || TaskPriority.P2);
+    setTagsString(task.tags?.join(', ') || '');
+    setAssigneeSearchTerm('');
   }, [task]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -46,8 +57,8 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
         alert("You do not have permission to edit this task.");
         return;
     }
-    
-    updateTask({ ...task, title, description, assigneeIds, eta });
+    const tagsArray = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+    updateTask({ ...task, title, description, assigneeIds, eta, status, priority, tags: tagsArray });
   };
 
   const handleAssigneeToggle = (userId: string) => {
@@ -57,91 +68,109 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
   };
 
   const filteredUsers = usersForSuggestions
-    .filter(user => user.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    .filter(user => user.name.toLowerCase().includes(assigneeSearchTerm.toLowerCase()));
 
   return (
     <Modal isOpen={!!task} onClose={() => setEditingTask(null)} title={`Edit Task: ${task.title}`}>
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label htmlFor="editTaskTitle" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Task Title
-          </label>
-          <input
-            type="text"
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="editTaskTitle" className="text-neutral-700 dark:text-neutral-300">Task Title</Label>
+          <Input
             id="editTaskTitle"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
             required
           />
         </div>
 
-        <div className="mb-4">
-          <label htmlFor="editTaskDescription" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Description (Optional)
-          </label>
-          <textarea
+        <div>
+          <Label htmlFor="editTaskDescription" className="text-neutral-700 dark:text-neutral-300">Description (Optional)</Label>
+          <Textarea
             id="editTaskDescription"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
-        <div className="mb-4">
-          <label htmlFor="editTaskEta" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            ETA
-          </label>
-          <input
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="editTaskStatus" className="text-neutral-700 dark:text-neutral-300">Status</Label>
+            <Select value={status} onValueChange={(value) => setStatus(value as TaskStatus)}>
+              <SelectTrigger id="editTaskStatus">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(TaskStatus).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="editTaskPriority" className="text-neutral-700 dark:text-neutral-300">Priority</Label>
+            <Select value={priority} onValueChange={(value) => setPriority(value as TaskPriority)}>
+              <SelectTrigger id="editTaskPriority">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(TaskPriority).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="editTaskTags" className="text-neutral-700 dark:text-neutral-300">Tags (comma-separated)</Label>
+          <Input
+            id="editTaskTags"
+            value={tagsString}
+            onChange={(e) => setTagsString(e.target.value)}
+            placeholder="e.g., bug, feature, UI"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="editTaskEta" className="text-neutral-700 dark:text-neutral-300">ETA (Optional)</Label>
+          <Input
             type="date"
             id="editTaskEta"
             value={eta}
             onChange={(e) => setEta(e.target.value)}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Assignees (Optional)
-          </label>
-          <input
-            type="text"
+        <div>
+          <Label className="text-neutral-700 dark:text-neutral-300">Assignees (Optional)</Label>
+          <Input
             placeholder="Search users..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 mb-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
+            value={assigneeSearchTerm}
+            onChange={(e) => setAssigneeSearchTerm(e.target.value)}
+            className="mb-2"
           />
-          <div className="max-h-40 overflow-y-auto border border-neutral-300 dark:border-neutral-600 rounded-md p-2 space-y-1 bg-white dark:bg-neutral-700">
+          <div className="max-h-40 overflow-y-auto border border-input rounded-md p-2 space-y-1 bg-background">
             {filteredUsers.length > 0 ? filteredUsers.map(user => (
-              <div key={user.id} className="flex items-center justify-between p-1 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded">
-                <span className="text-sm">{user.name}</span>
+              <div key={user.id} className="flex items-center justify-between p-1 hover:bg-accent hover:text-accent-foreground rounded">
+                <label htmlFor={`edit-assignee-${user.id}`} className="text-sm flex-grow cursor-pointer">{user.name}</label>
                 <input
                   type="checkbox"
+                  id={`edit-assignee-${user.id}`}
                   checked={assigneeIds.includes(user.id)}
                   onChange={() => handleAssigneeToggle(user.id)}
-                  className="form-checkbox h-4 w-4 text-primary-600 rounded border-neutral-300 dark:border-neutral-500 focus:ring-primary-500"
+                  className="form-checkbox h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary ml-2"
                 />
               </div>
-            )) : <p className="text-xs text-neutral-500 dark:text-neutral-400">No matching users found.</p>}
+            )) : <p className="text-xs text-muted-foreground">No matching users found.</p>}
           </div>
         </div>
 
         <div className="mt-6 flex justify-end space-x-3">
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => setEditingTask(null)}
-            className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100 dark:bg-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-500 border border-neutral-300 dark:border-neutral-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
-          >
-            Save Changes
-          </button>
+          </Button>
+          <Button type="submit">Save Changes</Button>
         </div>
       </form>
     </Modal>

@@ -1,9 +1,10 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState } from '../types';
+import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState, TaskStatus, TaskPriority } from '../types';
 import * as supabaseService from '../services/supabaseService'; 
 import { useAuth } from './AuthContext';
+import { useToast } from "@/hooks/use-toast";
 
 interface DataContextType {
   boardData: BoardData | null;
@@ -11,7 +12,16 @@ interface DataContextType {
   fetchBoardData: () => Promise<void>;
   addProject: (title: string, maintainerIds: string[]) => Promise<void>;
   updateProject: (updatedProject: ProjectColumn) => Promise<void>;
-  addTask: (projectId: string, title: string, description: string | undefined, assigneeIds: string[], eta: string | undefined) => Promise<void>;
+  addTask: (
+    projectId: string, 
+    title: string, 
+    description: string | undefined, 
+    assigneeIds: string[], 
+    eta: string | undefined,
+    status: TaskStatus,
+    priority: TaskPriority,
+    tags: string[]
+  ) => Promise<void>;
   moveProject: (projectId: string, newIndex: number) => Promise<void>;
   moveTaskWithinProject: (projectId: string, taskId: string, newIndex: number) => Promise<void>;
   moveTaskBetweenProjects: (startProjectId: string, finishProjectId: string, taskId: string, newIndex: number) => Promise<void>;
@@ -44,19 +54,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [boardData, setBoardData] = useState<BoardData | null>(null);
   const [usersForSuggestions, setUsersForSuggestions] = useState<Array<Pick<User, 'id' | 'name' | 'role'>>>([]);
   const { users: authContextUsers, currentUser } = useAuth(); 
+  const { toast } = useToast();
   
   const [showAddProjectModal, setShowAddProjectModalState] = useState(false);
   const [showAddTaskModalForProject, setShowAddTaskModalForProjectState] = useState<string | null>(null);
   const [showCreateUserModal, setShowCreateUserModalState] = useState(false);
   const [editingProject, setEditingProjectState] = useState<ProjectColumn | null>(null);
   const [editingTask, setEditingTaskState] = useState<Task | null>(null);
-  const [confirmationModalState, setConfirmationModalState] = useState<ConfirmationModalState>({
+  
+  const initialConfirmationState: ConfirmationModalState = {
     isOpen: false,
     title: '',
     message: '',
     onConfirmAction: null,
-  });
+  };
+  const [confirmationModalState, setConfirmationModalState] = useState<ConfirmationModalState>(initialConfirmationState);
 
+  const hideConfirmationModal = useCallback(() => {
+    setConfirmationModalState(prev => ({ ...prev, isOpen: false, onConfirmAction: null }));
+  }, []);
 
   const fetchBoardData = useCallback(async () => {
     if (!currentUser) { 
@@ -68,9 +84,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setBoardData(data);
     } catch (error) {
       console.error("Failed to fetch board data from Supabase:", error);
+      toast({ title: "Error", description: "Failed to load board data.", variant: "destructive" });
       setBoardData({ tasks: {}, projects: {}, projectOrder: [] }); 
     }
-  }, [currentUser]);
+  }, [currentUser, toast]);
 
   useEffect(() => {
     fetchBoardData();
@@ -82,7 +99,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   const addProject = useCallback(async (title: string, maintainerIds: string[]) => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) {
-        alert("Only Admins can create projects.");
+        toast({ title: "Permission Denied", description: "Only Admins can create projects.", variant: "destructive" });
         return;
     }
     if (!boardData) return;
@@ -91,58 +108,70 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (newProject) {
       await fetchBoardData(); 
       setShowAddProjectModalState(false);
+      toast({ title: "Project Created", description: `Project "${title}" was successfully created.` });
     } else {
-      alert("Failed to create project on Supabase.");
+      toast({ title: "Error", description: "Failed to create project.", variant: "destructive" });
     }
-  }, [boardData, currentUser, fetchBoardData]);
+  }, [boardData, currentUser, fetchBoardData, toast]);
 
   const updateProject = useCallback(async (updatedProject: ProjectColumn) => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) { 
-        alert("Only Admins can update projects.");
+        toast({ title: "Permission Denied", description: "Only Admins can update projects.", variant: "destructive" });
         return;
     }
     const success = await supabaseService.updateProject(updatedProject);
     if (success) {
       await fetchBoardData(); 
       setEditingProjectState(null); 
+      toast({ title: "Project Updated", description: `Project "${updatedProject.title}" was successfully updated.` });
     } else {
-        alert(`Failed to update project "${updatedProject.title}" on Supabase.`);
+        toast({ title: "Error", description: `Failed to update project "${updatedProject.title}".`, variant: "destructive" });
     }
-  }, [currentUser, fetchBoardData]);
+  }, [currentUser, fetchBoardData, toast]);
 
-  const addTask = useCallback(async (projectId: string, title: string, description: string | undefined, assigneeIds: string[], eta: string | undefined) => {
+  const addTask = useCallback(async (
+    projectId: string, 
+    title: string, 
+    description: string | undefined, 
+    assigneeIds: string[], 
+    eta: string | undefined,
+    status: TaskStatus,
+    priority: TaskPriority,
+    tags: string[]
+  ) => {
     if (!boardData) return;
     const project = boardData.projects[projectId];
     if (!project) {
-        alert("Project not found. Cannot add task.");
+        toast({ title: "Error", description: "Project not found. Cannot add task.", variant: "destructive" });
         return;
     }
 
     const canAddTaskPermission = currentUser?.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser?.id || '');
     if (!canAddTaskPermission) {
-        alert("Only Admins or Project Maintainers can add tasks to this project.");
+        toast({ title: "Permission Denied", description: "Only Admins or Project Maintainers can add tasks.", variant: "destructive" });
         return;
     }
     const orderIndex = project.taskIds.length; 
-    const newTask = await supabaseService.createTask(projectId, title, description, assigneeIds, eta, orderIndex);
+    const newTask = await supabaseService.createTask(projectId, title, description, assigneeIds, eta, orderIndex, status, priority, tags);
     if (newTask) {
       await fetchBoardData(); 
       setShowAddTaskModalForProjectState(null);
+      toast({ title: "Task Created", description: `Task "${title}" was successfully added to project "${project.title}".` });
     } else {
-      alert("Failed to create task on Supabase.");
+      toast({ title: "Error", description: "Failed to create task.", variant: "destructive" });
     }
-  }, [boardData, currentUser, fetchBoardData]);
+  }, [boardData, currentUser, fetchBoardData, toast]);
 
   const updateTask = useCallback(async (updatedTask: Task) => {
     if (!boardData || !currentUser) return;
     const project = boardData.projects[updatedTask.projectId];
     if (!project) {
-        alert("Project not found for task update.");
+        toast({ title: "Error", description: "Project not found for task update.", variant: "destructive" });
         return;
     }
     const canUpdate = currentUser.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser.id);
     if (!canUpdate) {
-        alert("You do not have permission to update tasks in this project.");
+        toast({ title: "Permission Denied", description: "You do not have permission to update tasks in this project.", variant: "destructive" });
         setEditingTaskState(null); 
         return;
     }
@@ -151,15 +180,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (success) {
       await fetchBoardData(); 
       setEditingTaskState(null); 
+      toast({ title: "Task Updated", description: `Task "${updatedTask.title}" was successfully updated.` });
     } else {
-      alert(`Failed to update task "${updatedTask.title}" on Supabase.`);
+      toast({ title: "Error", description: `Failed to update task "${updatedTask.title}".`, variant: "destructive" });
     }
-  }, [boardData, currentUser, fetchBoardData]);
-
-  const hideConfirmationModal = useCallback(() => {
-    setConfirmationModalState(prev => ({ ...prev, isOpen: false, onConfirmAction: null }));
-  }, []);
-
+  }, [boardData, currentUser, fetchBoardData, toast]);
+  
   const _deleteTaskInternal = useCallback(async (taskId: string, projectId: string) => {
     if (!boardData || !currentUser) {
       hideConfirmationModal();
@@ -167,28 +193,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const project = boardData.projects[projectId];
     if (!project) {
+      toast({ title: "Error", description: "Project not found for task deletion.", variant: "destructive" });
       hideConfirmationModal();
       return;
     }
     
     const canDelete = currentUser.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser.id);
     if (!canDelete) {
-        alert("You do not have permission to delete tasks in this project.");
+        toast({ title: "Permission Denied", description: "You do not have permission to delete tasks in this project.", variant: "destructive" });
         hideConfirmationModal();
         return;
     }
     const success = await supabaseService.deleteTask(taskId);
      if (success) {
       await fetchBoardData();
+      toast({ title: "Task Deleted", description: `Task was successfully deleted.` });
     } else {
-        alert(`Failed to delete task from Supabase.`);
+        toast({ title: "Error", description: `Failed to delete task.`, variant: "destructive" });
     }
     hideConfirmationModal();
-  }, [boardData, currentUser, fetchBoardData, hideConfirmationModal]);
+  }, [boardData, currentUser, fetchBoardData, hideConfirmationModal, toast]);
   
   const _deleteProjectInternal = useCallback(async (projectId: string) => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) {
-        alert("Only Admins can delete projects.");
+        toast({ title: "Permission Denied", description: "Only Admins can delete projects.", variant: "destructive" });
         hideConfirmationModal();
         return;
     }
@@ -201,11 +229,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const success = await supabaseService.deleteProject(projectId);
     if (success) {
         await fetchBoardData(); 
+        toast({ title: "Project Deleted", description: `Project "${projectTitle}" and its tasks were successfully deleted.` });
     } else {
-        alert(`Failed to delete project "${projectTitle}" from Supabase.`);
+        toast({ title: "Error", description: `Failed to delete project "${projectTitle}".`, variant: "destructive" });
     }
     hideConfirmationModal();
-  }, [currentUser, boardData, fetchBoardData, hideConfirmationModal]);
+  }, [currentUser, boardData, fetchBoardData, hideConfirmationModal, toast]);
 
   const showConfirmationModal = useCallback((title: string, message: string, onConfirmAction: () => void, confirmText = 'Confirm', cancelText = 'Cancel') => {
     setConfirmationModalState({ isOpen: true, title, message, onConfirmAction, confirmText, cancelText });
@@ -246,10 +275,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const success = await supabaseService.updateProjectOrder(newProjectOrder);
     if (!success) {
-      alert("Failed to save project order to Supabase.");
+      toast({ title: "Error", description: "Failed to save project order.", variant: "destructive" });
       await fetchBoardData(); 
     }
-  }, [boardData, fetchBoardData]);
+  }, [boardData, fetchBoardData, toast]);
 
   const moveTaskWithinProject = useCallback(async (projectId: string, taskId: string, newIndex: number) => {
     if (!boardData || !boardData.projects[projectId]) return;
@@ -273,10 +302,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const success = await supabaseService.updateTaskOrderInProject(projectId, newTaskIds);
     if (!success) {
-      alert("Failed to save task order to Supabase.");
+      toast({ title: "Error", description: "Failed to save task order.", variant: "destructive" });
       await fetchBoardData(); 
     }
-  }, [boardData, fetchBoardData]);
+  }, [boardData, fetchBoardData, toast]);
 
   const moveTaskBetweenProjects = useCallback(async (startProjectId: string, finishProjectId: string, taskId: string, newIndexInFinish: number) => {
     if (!boardData || !boardData.tasks[taskId] || !boardData.projects[startProjectId] || !boardData.projects[finishProjectId]) return;
@@ -297,10 +326,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const successOldOrder = await supabaseService.updateTaskOrderInProject(startProjectId, finalTaskIdsInStartProject);
 
     if (!successMove || !successOldOrder) {
-      alert("Failed to save task move and reorder to Supabase.");
+      toast({ title: "Error", description: "Failed to save task move and reorder.", variant: "destructive" });
       await fetchBoardData(); 
     }
-  }, [boardData, fetchBoardData]);
+  }, [boardData, fetchBoardData, toast]);
   
   const setShowAddProjectModal = useCallback((show: boolean) => setShowAddProjectModalState(show), []);
   const setShowAddTaskModalForProject = useCallback((projectId: string | null) => {
@@ -329,4 +358,3 @@ export const useData = (): DataContextType => {
   if (context === undefined) throw new Error('useData must be used within a DataProvider');
   return context;
 };
-

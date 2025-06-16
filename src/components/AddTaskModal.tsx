@@ -4,7 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { UserRole } from '../types';
+import { UserRole, TaskStatus, TaskPriority } from '../types';
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AddTaskModalProps {
   projectId: string;
@@ -24,7 +29,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
   const [description, setDescription] = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [eta, setEta] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [status, setStatus] = useState<TaskStatus>(TaskStatus.TODO);
+  const [priority, setPriority] = useState<TaskPriority>(TaskPriority.P2);
+  const [tagsString, setTagsString] = useState('');
+  const [assigneeSearchTerm, setAssigneeSearchTerm] = useState('');
 
   const project = boardData?.projects[projectId];
 
@@ -34,7 +42,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
       setDescription('');
       setAssigneeIds([]);
       setEta('');
-      setSearchTerm('');
+      setStatus(TaskStatus.TODO);
+      setPriority(TaskPriority.P2);
+      setTagsString('');
+      setAssigneeSearchTerm('');
     }
   }, [showAddTaskModalForProject, projectId]);
 
@@ -55,8 +66,8 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
         alert("Only Admins or Project Maintainers can add tasks to this project.");
         return;
     }
-
-    addTask(projectId, title, description, assigneeIds, eta);
+    const tagsArray = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+    addTask(projectId, title, description, assigneeIds, eta, status, priority, tagsArray);
   };
 
   const handleAssigneeToggle = (userId: string) => {
@@ -66,7 +77,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
   };
 
   const filteredUsers = usersForSuggestions
-    .filter(user => user.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    .filter(user => user.name.toLowerCase().includes(assigneeSearchTerm.toLowerCase()));
 
   return (
     <Modal 
@@ -76,91 +87,108 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
       }} 
       title={`Add Task to "${project?.title || 'Project'}"`}
     >
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label htmlFor={`taskTitle-${projectId}`} className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Task Title
-          </label>
-          <input
-            type="text"
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor={`taskTitle-${projectId}`} className="text-neutral-700 dark:text-neutral-300">Task Title</Label>
+          <Input
             id={`taskTitle-${projectId}`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
             required
           />
         </div>
 
-        <div className="mb-4">
-          <label htmlFor={`taskDescription-${projectId}`} className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Description (Optional)
-          </label>
-          <textarea
+        <div>
+          <Label htmlFor={`taskDescription-${projectId}`} className="text-neutral-700 dark:text-neutral-300">Description (Optional)</Label>
+          <Textarea
             id={`taskDescription-${projectId}`}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
+          />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor={`taskStatus-${projectId}`} className="text-neutral-700 dark:text-neutral-300">Status</Label>
+            <Select value={status} onValueChange={(value) => setStatus(value as TaskStatus)}>
+              <SelectTrigger id={`taskStatus-${projectId}`}>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(TaskStatus).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor={`taskPriority-${projectId}`} className="text-neutral-700 dark:text-neutral-300">Priority</Label>
+            <Select value={priority} onValueChange={(value) => setPriority(value as TaskPriority)}>
+              <SelectTrigger id={`taskPriority-${projectId}`}>
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(TaskPriority).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor={`taskTags-${projectId}`} className="text-neutral-700 dark:text-neutral-300">Tags (comma-separated)</Label>
+          <Input
+            id={`taskTags-${projectId}`}
+            value={tagsString}
+            onChange={(e) => setTagsString(e.target.value)}
+            placeholder="e.g., bug, feature, UI"
           />
         </div>
 
-        <div className="mb-4">
-          <label htmlFor={`taskEta-${projectId}`} className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            ETA (Estimated Time of Arrival/Completion)
-          </label>
-          <input
+        <div>
+          <Label htmlFor={`taskEta-${projectId}`} className="text-neutral-700 dark:text-neutral-300">ETA (Optional)</Label>
+          <Input
             type="date"
             id={`taskEta-${projectId}`}
             value={eta}
             onChange={(e) => setEta(e.target.value)}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
-        <div className="mb-4">
-          <label htmlFor={`assigneeSearch-${projectId}`} className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Assignees (Optional)
-          </label>
-          <input
-            type="text"
+        <div>
+          <Label htmlFor={`assigneeSearch-${projectId}`} className="text-neutral-700 dark:text-neutral-300">Assignees (Optional)</Label>
+          <Input
             id={`assigneeSearch-${projectId}`}
             placeholder="Search users..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 mb-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
+            value={assigneeSearchTerm}
+            onChange={(e) => setAssigneeSearchTerm(e.target.value)}
+            className="mb-2"
           />
-          <div className="max-h-40 overflow-y-auto border border-neutral-300 dark:border-neutral-600 rounded-md p-2 space-y-1">
+          <div className="max-h-40 overflow-y-auto border border-input rounded-md p-2 space-y-1 bg-background">
             {filteredUsers.length > 0 ? filteredUsers.map(user => (
-              <div key={user.id} className="flex items-center justify-between p-1 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded">
+              <div key={user.id} className="flex items-center justify-between p-1 hover:bg-accent hover:text-accent-foreground rounded">
                 <label htmlFor={`assignee-${projectId}-${user.id}`} className="text-sm flex-grow cursor-pointer">{user.name}</label>
                 <input
                   type="checkbox"
                   id={`assignee-${projectId}-${user.id}`}
                   checked={assigneeIds.includes(user.id)}
                   onChange={() => handleAssigneeToggle(user.id)}
-                  className="form-checkbox h-4 w-4 text-primary-600 rounded border-neutral-300 dark:border-neutral-500 focus:ring-primary-500 ml-2"
+                  className="form-checkbox h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary ml-2"
                 />
               </div>
-            )) : <p className="text-xs text-neutral-500 dark:text-neutral-400">No matching users found.</p>}
+            )) : <p className="text-xs text-muted-foreground">No matching users found.</p>}
           </div>
         </div>
 
         <div className="mt-6 flex justify-end space-x-3">
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => {
               setShowAddTaskModalForProject(null);
             }}
-            className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100 dark:bg-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-500 border border-neutral-300 dark:border-neutral-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
-          >
-            Add Task
-          </button>
+          </Button>
+          <Button type="submit">Add Task</Button>
         </div>
       </form>
     </Modal>
