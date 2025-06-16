@@ -1,5 +1,5 @@
 
-import { createClient, SupabaseClient, Session, User as SupabaseAuthUser, AuthError, PostgrestError } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient, type Session, type User as SupabaseAuthUser, type AuthError, type PostgrestError } from '@supabase/supabase-js';
 import type { BoardData, ProjectColumn, Task, User, UserRole } from '../types';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,16 +28,45 @@ export interface CreateUserAccountError extends PostgrestError {
 
 
 // --- Authentication Functions ---
-export const signUpUser = async (email: string, password: string, name: string, role: UserRole, avatarFile?: File): 
+export const signUpUser = async (email: string, password: string, name: string, role: UserRole, avatarFile?: File):
   Promise<{ success: boolean; error: SignUpError | null; user: SupabaseAuthUser | null }> => {
   console.log("Supabase: Signing up user", { email, name, role });
-  // Step 1: Sign up the user with Supabase Auth
-  const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+  
+  let authData: { user: SupabaseAuthUser | null; session: Session | null; } | null = null;
+  let authError: AuthError | null = null;
 
-  if (authError || !authData.user) {
+  // Step 1: Sign up the user with Supabase Auth  
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+    });
+    authData = data;
+    authError = error;
+  
+    if (authError) {
+      if (authError.message.includes('User already registered')) {
+        // Prompt user to login instead
+        console.log("User already exists. Please login.");
+        // Optionally, redirect to login
+      } else {
+        console.error(authError.message);
+      }
+    }
+  } catch (e) {
+    console.error('Unexpected error during supabase.auth.signUp:', e);
+    // Ensure authError is set if an unexpected error occurs during the signUp call itself
+    if (e instanceof Error) {
+        authError = { name: 'UnexpectedSignUpError', message: e.message } as AuthError;
+    } else {
+        authError = { name: 'UnexpectedSignUpError', message: 'An unknown error occurred during sign up.' } as AuthError;
+    }
+  }  
+
+  if (authError || !authData?.user) {
     console.error("Error signing up (Supabase Auth):", authError);
     const signUpError: SignUpError = {
-        ...(authError || {}), // Spread authError if it exists
+        ...(authError || { name: 'UnknownAuthError', message: 'Authentication sign up failed.' }), 
         message: authError?.message || "Authentication sign up failed.",
         isEmailConflict: authError?.message.toLowerCase().includes("user already registered") || authError?.message.toLowerCase().includes("email link is invalid or has expired"), 
     } as SignUpError;
@@ -139,7 +168,7 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
       id: data.id,
       name: data.name,
       email: data.email,
-      role: data.role as UserRole, // Assume role from DB matches enum
+      role: data.role as UserRole,
       avatarUrl: data.avatar_url,
     };
   }
@@ -466,3 +495,6 @@ export const updateTaskProjectAndOrder = async (
     return false;
   }
 };
+
+
+    
