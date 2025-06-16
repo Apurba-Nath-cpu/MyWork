@@ -45,7 +45,6 @@ const HomePage: React.FC = () => {
   }, [currentUser, loadingAuth, fetchBoardData]);
 
   const onDragEnd = useCallback((result: DropResult) => {
-    // If user logged out during drag, abort.
     if (!currentUser) {
       console.warn("onDragEnd: currentUser is null, drag operation aborted.");
       return;
@@ -56,7 +55,6 @@ const HomePage: React.FC = () => {
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    // Ensure boardData is available and valid before proceeding
     if (!boardData || !boardData.projects || !boardData.tasks || !Array.isArray(boardData.projectOrder)) {
         console.error("onDragEnd: boardData is not fully available or invalid. Aborting drag operation.", boardData);
         fetchBoardData(); 
@@ -146,8 +144,8 @@ const HomePage: React.FC = () => {
             direction="horizontal" 
             type={DROPPABLE_TYPE_PROJECT}
             isDropDisabled={false}
+            ignoreContainerClipping={true} 
             isCombineEnabled={false}
-            ignoreContainerClipping={false}
           >
             {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
               <div
