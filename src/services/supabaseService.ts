@@ -50,11 +50,11 @@ export const signUpUser = async (email: string, password: string, name: string, 
         console.log("User already exists. Please login.");
         // Optionally, redirect to login
       } else {
-        console.error(authError.message);
+        // console.error(authError.message);
       }
     }
   } catch (e) {
-    console.error('Unexpected error during supabase.auth.signUp:', e);
+    // console.error('Unexpected error during supabase.auth.signUp:', e);
     // Ensure authError is set if an unexpected error occurs during the signUp call itself
     if (e instanceof Error) {
         authError = { name: 'UnexpectedSignUpError', message: e.message } as AuthError;
@@ -64,7 +64,7 @@ export const signUpUser = async (email: string, password: string, name: string, 
   }  
 
   if (authError || !authData?.user) {
-    console.error("Error signing up (Supabase Auth):", authError);
+    // console.error("Error signing up (Supabase Auth):", authError);
     const signUpError: SignUpError = {
         ...(authError || { name: 'UnknownAuthError', message: 'Authentication sign up failed.' }), 
         message: authError?.message || "Authentication sign up failed.",

@@ -1,10 +1,11 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { UserRole, type User } from '../types';
+import { type User, UserRole } from '../types';
 import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
-import type { SignUpError } from '../services/supabaseService'; // Import the custom error types
+import type { SignUpError } from '../services/supabaseService';
+import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
   currentUser: User | null;
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [supabaseUser, setSupabaseUser] = useState<SupabaseAuthUser | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     setLoadingAuth(true);
@@ -45,9 +47,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         } catch (error) {
             console.error("Error processing auth state change:", error);
-            setCurrentUser(null); 
+            setCurrentUser(null);
         } finally {
-            setLoadingAuth(false); 
+            setLoadingAuth(false);
         }
       }
     );
@@ -55,7 +57,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []); 
+  }, []);
 
   const fetchPublicUsers = useCallback(async () => {
     const fetchedUsers = await supabaseService.getUsers();
@@ -83,26 +85,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signUp = useCallback(async (email: string, password: string, name: string, role: UserRole, avatarFile?: File): Promise<{ success: boolean; error?: string }> => {
     setLoadingAuth(true);
-    const { success, error, user } = await supabaseService.signUpUser(email, password, name, role, avatarFile);
+    const result = await supabaseService.signUpUser(email, password, name, role, avatarFile);
 
-    if (!success) {
+    if (!result.success) {
       setLoadingAuth(false);
-      if (error?.isEmailConflict) {
+      if (result.error?.isEmailConflict) {
         return { success: false, error: "User with this email already exists. Please try logging in." };
       }
-      return { success: false, error: error?.message || 'Could not create account.' };
+      return { success: false, error: result.error?.message || 'Could not create account.' };
     }
 
-    if (user) {
+    if (result.user) {
       const { data: sessionData } = await supabaseService.getSession();
-      if (!user.email_confirmed_at && sessionData.session === null) {
-          // Toast for confirmation email is now in AuthScreen
+      if (!result.user.email_confirmed_at && sessionData.session === null) {
+        toast({
+          title: "Sign Up Successful!",
+          description: "Please check your email to confirm your account.",
+        });
       } else {
-          console.log('Sign up successful, user state will be updated by onAuthStateChange.');
+        toast({
+          title: "Sign Up Successful!",
+          description: "Account created. You will be logged in automatically.",
+        });
       }
     }
     return { success: true };
-  }, []);
+  }, [setLoadingAuth, toast]);
 
   const logout = useCallback(async () => {
     setLoadingAuth(true);
@@ -111,20 +119,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean}> => {
     if (currentUser?.role !== UserRole.ADMIN) {
-      // Toast for permission error is in CreateUserModal
+      toast({
+        title: "Permission Denied",
+        description: "Only Admins can create user profiles.",
+        variant: "destructive",
+      });
       return { success: false, user: null, error: "Permission denied." };
     }
     const result = await supabaseService.createUserAccount(name, email, role);
     if (result.user) {
       setUsers(prevUsers => [...prevUsers, result.user!].sort((a,b) => a.name.localeCompare(b.name)));
-      // Toast notification for success is now in CreateUserModal
+      toast({
+        title: "User Created",
+        description: `User profile for ${result.user.name} created successfully.`,
+      });
       return { success: true, user: result.user };
     } else {
-      // Toast notification for error is now in CreateUserModal
       const errorMessage = result.error?.isEmailConflict ? "Email already in use." : (result.error?.message || `Failed to create user profile for ${name}.`);
+      toast({
+        title: "Error Creating User",
+        description: errorMessage,
+        variant: "destructive",
+      });
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict };
     }
-  }, [currentUser]);
+  }, [currentUser, toast]);
 
   return (
     <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, createUser, fetchPublicUsers }}>
