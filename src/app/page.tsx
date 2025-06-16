@@ -45,23 +45,28 @@ const HomePage: React.FC = () => {
   }, [currentUser, loadingAuth, fetchBoardData]);
 
   const onDragEnd = useCallback((result: DropResult) => {
+    // If user logged out during drag, abort.
+    if (!currentUser) {
+      console.warn("onDragEnd: currentUser is null, drag operation aborted.");
+      return;
+    }
+
     const { destination, source, draggableId, type } = result;
 
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    // Ensure boardData is available before proceeding
-    if (!boardData || !boardData.projects || !boardData.tasks) {
-        console.error("onDragEnd: boardData is not fully available. Aborting drag operation.");
-        fetchBoardData(); // Attempt to refresh data if it's in a bad state
+    // Ensure boardData is available and valid before proceeding
+    if (!boardData || !boardData.projects || !boardData.tasks || !Array.isArray(boardData.projectOrder)) {
+        console.error("onDragEnd: boardData is not fully available or invalid. Aborting drag operation.", boardData);
+        fetchBoardData(); 
         return;
     }
 
     if (type === DROPPABLE_TYPE_PROJECT) {
-      // Check if the dragged project and its place in projectOrder exist
       if (!boardData.projects[draggableId] || !boardData.projectOrder.includes(draggableId)) {
-          console.error(`onDragEnd: Project with ID ${draggableId} not found in current boardData.projectOrder or boardData.projects. Aborting moveProject.`);
-          fetchBoardData(); // Refresh data
+          console.error(`onDragEnd: Project with ID ${draggableId} not found. Aborting moveProject.`);
+          fetchBoardData(); 
           return;
       }
       moveProject(draggableId, destination.index);
@@ -69,23 +74,20 @@ const HomePage: React.FC = () => {
     }
 
     if (type === DROPPABLE_TYPE_TASK) {
-      // Check if the dragged task exists
       if (!boardData.tasks[draggableId]) {
-          console.error(`onDragEnd: Task with ID ${draggableId} not found in current boardData.tasks. Aborting task move.`);
-          fetchBoardData(); // Refresh data
+          console.error(`onDragEnd: Task with ID ${draggableId} not found. Aborting task move.`);
+          fetchBoardData(); 
           return;
       }
-      // Check if source and destination projects exist
       if (!boardData.projects[source.droppableId] || (destination.droppableId && !boardData.projects[destination.droppableId])) {
-           console.error(`onDragEnd: Source or destination project not found. Source: ${source.droppableId}, Dest: ${destination.droppableId}. Aborting task move.`);
-           fetchBoardData(); // Refresh data
+           console.error(`onDragEnd: Source or destination project not found. Aborting task move.`);
+           fetchBoardData(); 
            return;
       }
 
       const startProjectId = source.droppableId;
       const finishProjectId = destination.droppableId;
       if (startProjectId === finishProjectId) {
-        // Check if the task is part of the source project's taskIds
         if (!boardData.projects[startProjectId]?.taskIds.includes(draggableId)) {
             console.error(`onDragEnd: Task ${draggableId} not found in source project ${startProjectId}. Aborting moveTaskWithinProject.`);
             fetchBoardData();
@@ -93,7 +95,6 @@ const HomePage: React.FC = () => {
         }
         moveTaskWithinProject(startProjectId, draggableId, destination.index);
       } else {
-        // Check if the task is part of the source project's taskIds
         if (!boardData.projects[startProjectId]?.taskIds.includes(draggableId)) {
             console.error(`onDragEnd: Task ${draggableId} not found in source project ${startProjectId}. Aborting moveTaskBetweenProjects.`);
             fetchBoardData();
@@ -102,7 +103,7 @@ const HomePage: React.FC = () => {
         moveTaskBetweenProjects(startProjectId, finishProjectId, draggableId, destination.index);
       }
     }
-  }, [moveProject, moveTaskWithinProject, moveTaskBetweenProjects, boardData, fetchBoardData]); 
+  }, [currentUser, moveProject, moveTaskWithinProject, moveTaskBetweenProjects, boardData, fetchBoardData]); 
   
   if (loadingAuth) {
     return (
