@@ -16,6 +16,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loadingAuth, setLoadingAuth] = useState(true);
   const { toast } = useToast();
 
+  // Modified fetchPublicUsers:
+  // - Takes organizationId as a mandatory string.
+  // - Removed currentUser from its useCallback dependency array, making it stable.
+  const fetchPublicUsers = useCallback(async (organizationId: string) => {
+    if (organizationId) {
+        const fetchedUsers = await supabaseService.getUsers(organizationId);
+        setUsers(fetchedUsers);
+    } else {
+        // This case should ideally not be hit if called correctly with a valid organizationId
+        console.warn("fetchPublicUsers called without a valid organizationId.");
+        setUsers([]);
+    }
+  }, []); // setUsers is stable from useState
+
   useEffect(() => {
     setLoadingAuth(true);
     const { data: authListener } = supabaseService.onAuthStateChange(
@@ -29,10 +43,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setCurrentUser(userProfile); 
             if (!userProfile) {
               console.warn(`No profile found in public.users for authenticated user ID: ${authUserFromSession.id}.`);
+              setUsers([]); // Clear users if profile not found
             } else {
               if (userProfile.organization_id) { 
-                await fetchPublicUsers(userProfile.organization_id);
+                await fetchPublicUsers(userProfile.organization_id); // Call stable fetchPublicUsers
               } else {
+                console.warn(`User profile ${userProfile.id} does not have an organization_id.`);
                 setUsers([]); 
               }
             }
@@ -53,28 +69,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []); 
-
-  const fetchPublicUsers = useCallback(async (organizationId?: string) => {
-    const orgIdToFetch = organizationId || currentUser?.organization_id;
-    if (orgIdToFetch) { 
-        const fetchedUsers = await supabaseService.getUsers(orgIdToFetch);
-        setUsers(fetchedUsers);
-    } else {
-        setUsers([]); 
-    }
-  }, [currentUser]);
-
+  }, [fetchPublicUsers]); // Dependency array is now stable
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    setLoadingAuth(true);
     const { success, error } = await supabaseService.signInUser(email, password);
     if (!success) {
+        setLoadingAuth(false);
         return { success: false, error: error?.message || 'Invalid credentials or network issue.'};
     }
+    // setLoadingAuth(false) will be handled by onAuthStateChange
     return { success: true };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string, organizationName: string, avatarFile?: File): Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }> => {
+    setLoadingAuth(true);
     const result = await supabaseService.signUpUserAndCreateOrg(email, password, name, organizationName, avatarFile);
 
     if (!result.success || !result.user) {
@@ -84,11 +93,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (result.error?.isOrgNameConflict) {
         errorMessage = "Organization name is already taken. Please choose another.";
       }
+      setLoadingAuth(false);
       return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
     
+    // Check if email confirmation is pending
     const { data: sessionData } = await supabaseService.getSession();
-    if (!result.user.email_confirmed_at && sessionData.session === null) { // Using result.user here (SupabaseAuthUser)
+    if (!result.user.email_confirmed_at && sessionData.session === null) {
         toast({
             title: "Sign Up Successful!",
             description: "Please check your email to confirm your account.",
@@ -99,13 +110,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             description: "Account and organization created. You will be logged in automatically.",
         });
     }
+    // setLoadingAuth(false) will be handled by onAuthStateChange
     return { success: true, isOrgNameConflict: false, isEmailConflict: false };
   }, [toast]);
 
   const logout = useCallback(async () => {
     setLoadingAuth(true);
-    await supabaseService.signOutUser();
-  }, []);
+    const { error } = await supabaseService.signOutUser();
+    if (error) {
+      console.error("Logout error:", error);
+      toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
+      setLoadingAuth(false); // Ensure loading stops on error
+    }
+    // If successful, onAuthStateChange will handle setting currentUser to null and setLoadingAuth to false.
+  }, [toast]);
 
   const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
     if (currentUser?.role !== UserRole.ADMIN || !currentUser.organization_id) {
@@ -116,7 +134,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const result = await supabaseService.createUserAccount(name, email, role, currentUser.organization_id);
     
     if (result.user) {
-      setUsers(prevUsers => [...prevUsers, result.user!].sort((a,b) => a.name.localeCompare(b.name)));
+      // Refresh the users list for the current admin's organization
+      await fetchPublicUsers(currentUser.organization_id);
       toast({ title: "User Created", description: `User profile for ${result.user.name} created successfully.` });
       return { success: true, user: result.user };
     } else {
@@ -129,7 +148,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast({ title: "Error Creating User", description: errorMessage, variant: "destructive" });
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict, isUsernameConflictInOrg: result.error?.isUsernameConflictInOrg };
     }
-  }, [currentUser, toast]);
+  }, [currentUser, toast, fetchPublicUsers]);
 
   const deleteUserByAdmin = useCallback(async (userIdToDelete: string): Promise<{ success: boolean; error?: string }> => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
@@ -146,14 +165,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const result = await supabaseService.deleteUserByAdmin(userIdToDelete, currentUser.id, currentUser.organization_id);
 
     if (result.success) {
-      setUsers(prevUsers => prevUsers.filter(user => user.id !== userIdToDelete));
+      // Refresh the users list
+      await fetchPublicUsers(currentUser.organization_id);
       toast({ title: "User Deleted", description: `User profile has been deleted. Note: The user's authentication entry might still exist and require manual cleanup by a Supabase project admin if direct auth deletion failed.` });
       return { success: true };
     } else {
       toast({ title: "Error Deleting User", description: result.error?.message || "Could not delete user profile.", variant: "destructive" });
       return { success: false, error: result.error?.message };
     }
-  }, [currentUser, toast]);
+  }, [currentUser, toast, fetchPublicUsers]);
 
 
   return (
@@ -170,3 +190,6 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+
+    
