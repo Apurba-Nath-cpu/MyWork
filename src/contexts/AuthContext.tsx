@@ -1,7 +1,7 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { type User, UserRole } from '../types';
+import { UserRole, type User } from '../types';
 import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import type { SignUpError } from '../services/supabaseService'; // Import the custom error types
@@ -27,7 +27,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
-    setLoadingAuth(true); // Set loading to true initially
+    setLoadingAuth(true);
     const { data: authListener } = supabaseService.onAuthStateChange(
       async (_event: string, session: Session | null) => {
         try {
@@ -45,9 +45,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         } catch (error) {
             console.error("Error processing auth state change:", error);
-            setCurrentUser(null); // Ensure clean state on error
+            setCurrentUser(null); 
         } finally {
-            setLoadingAuth(false); // Set loading to false once auth state is determined
+            setLoadingAuth(false); 
         }
       }
     );
@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []); // Empty dependency array is correct for the main setup effect
+  }, []); 
 
   const fetchPublicUsers = useCallback(async () => {
     const fetchedUsers = await supabaseService.getUsers();
@@ -78,7 +78,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLoadingAuth(false);
         return { success: false, error: error?.message || 'Invalid credentials or network issue.'};
     }
-    // onAuthStateChange handles success and setLoadingAuth(false)
     return { success: true };
   }, []);
 
@@ -89,7 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!success) {
       setLoadingAuth(false);
       if (error?.isEmailConflict) {
-        return { success: false, error: "This email is already registered. Please try logging in or use a different email." };
+        return { success: false, error: "User with this email already exists. Please try logging in." };
       }
       return { success: false, error: error?.message || 'Could not create account.' };
     }
@@ -97,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user) {
       const { data: sessionData } = await supabaseService.getSession();
       if (!user.email_confirmed_at && sessionData.session === null) {
-          alert('Sign up successful! Please check your email to confirm your account.');
+          // Toast for confirmation email is now in AuthScreen
       } else {
           console.log('Sign up successful, user state will be updated by onAuthStateChange.');
       }
@@ -112,7 +111,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean}> => {
     if (currentUser?.role !== UserRole.ADMIN) {
-      alert("Only admins can create user profiles using this function.");
+      // Toast for permission error is in CreateUserModal
       return { success: false, user: null, error: "Permission denied." };
     }
     const result = await supabaseService.createUserAccount(name, email, role);
@@ -125,7 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const errorMessage = result.error?.isEmailConflict ? "Email already in use." : (result.error?.message || `Failed to create user profile for ${name}.`);
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict };
     }
-  }, [currentUser]); // Removed fetchPublicUsers, as setUsers is updated directly
+  }, [currentUser]);
 
   return (
     <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, createUser, fetchPublicUsers }}>
