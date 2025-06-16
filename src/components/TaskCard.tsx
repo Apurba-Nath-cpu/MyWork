@@ -5,7 +5,7 @@ import { Draggable } from 'react-beautiful-dnd';
 import type { DraggableProvided, DraggableStateSnapshot } from 'react-beautiful-dnd';
 import { Task, UserRole, TaskStatus, TaskPriority } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
-import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon, TagIcon, ExclamationTriangleIcon, CheckCircleIcon, CircleIcon, ClockIcon } from './custom-icons'; 
+import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon, ExclamationTriangleIcon, CheckCircleIcon, CircleIcon, ClockIcon } from './custom-icons'; 
 import { useData } from '../contexts/DataContext';
 import { Badge } from "@/components/ui/badge"; 
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ const getStatusIcon = (status: TaskStatus) => {
     case TaskStatus.DONE:
       return <CheckCircleIcon className="w-3 h-3 mr-1 text-green-500" />;
     case TaskStatus.BLOCKED:
-      return <ExclamationTriangleIcon className="w-3 h-3 mr-1 text-red-500" />; // Changed from AlertTriangleIcon
+      return <ExclamationTriangleIcon className="w-3 h-3 mr-1 text-red-500" />;
     default:
       return <CircleIcon className="w-3 h-3 mr-1" />;
   }
@@ -54,7 +54,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   const getAssigneeName = (userId: string) => users.find(u => u.id === userId)?.name || 'Unknown';
   
   const project = boardData?.projects[task.projectId];
-  const canModifyTask = currentUser?.role === UserRole.ADMIN || (project?.maintainerIds.includes(currentUser?.id || ''));
+  const canModifyTask = currentUser?.role === UserRole.ADMIN || 
+                        (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ''));
 
   const handleDelete = () => {
     if (!canModifyTask) {
@@ -65,6 +66,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   };
 
   const handleEdit = () => {
+    if (!canModifyTask) {
+        alert("Permission denied: You cannot edit this task.");
+        return;
+    }
     setEditingTask(task);
   };
 

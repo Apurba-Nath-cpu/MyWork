@@ -61,8 +61,9 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
         return;
     }
 
-    const canAddTask = currentUser?.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser?.id || '');
-    if (!canAddTask) {
+    const canAddTaskPermission = currentUser?.role === UserRole.ADMIN || 
+                               (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ''));
+    if (!canAddTaskPermission) {
         alert("Only Admins or Project Maintainers can add tasks to this project.");
         return;
     }

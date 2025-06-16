@@ -52,8 +52,9 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
         return;
     }
 
-    const canEdit = currentUser?.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser?.id || '');
-    if (!canEdit) {
+    const canEditPermission = currentUser?.role === UserRole.ADMIN || 
+                            (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ''));
+    if (!canEditPermission) {
         alert("You do not have permission to edit this task.");
         return;
     }

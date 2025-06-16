@@ -21,7 +21,8 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
   const { currentUser } = useAuth();
   const { setShowAddTaskModalForProject, requestProjectDeletion, setEditingProject } = useData();
 
-  const canAddTask = currentUser?.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser?.id || "");
+  const canAddTask = currentUser?.role === UserRole.ADMIN || 
+                     (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ""));
   const canEditProject = currentUser?.role === UserRole.ADMIN;
   const canDeleteProject = currentUser?.role === UserRole.ADMIN;
 
@@ -35,6 +36,10 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
   };
 
   const handleEditProject = () => {
+    if (!canEditProject) {
+        alert("Permission denied: Only Admins can edit projects.");
+        return;
+    }
     setEditingProject(project);
   };
 
@@ -117,4 +122,3 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
 };
 
 export default ProjectColumnComponent;
-
