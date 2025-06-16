@@ -39,7 +39,7 @@ const HomePage: React.FC = () => {
   } = useData();
 
   useEffect(() => {
-    if (currentUser && !loadingAuth) {
+    if (currentUser && !loadingAuth && currentUser.organization_id) {
       fetchBoardData();
     }
   }, [currentUser, loadingAuth, fetchBoardData]);
@@ -62,8 +62,12 @@ const HomePage: React.FC = () => {
     }
 
     if (type === DROPPABLE_TYPE_PROJECT) {
+      if (!currentUser) { 
+        console.warn("onDragEnd (project): currentUser is null, drag operation aborted.");
+        return;
+      }
       if (!boardData.projects[draggableId] || !boardData.projectOrder.includes(draggableId)) {
-          console.error(`onDragEnd: Project with ID ${draggableId} not found. Aborting moveProject.`);
+          console.error(`onDragEnd: Project with ID ${draggableId} not found in boardData or boardData.projectOrder. Aborting moveProject.`, boardData);
           fetchBoardData(); 
           return;
       }
@@ -138,7 +142,7 @@ const HomePage: React.FC = () => {
     <div className={`flex flex-col h-screen font-sans ${theme} bg-background text-foreground`}>
       <Navbar />
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex-grow p-4 overflow-x-auto overflow-y-hidden"> 
+        <div className="flex-grow p-4 overflow-x-auto"> 
           <Droppable 
             droppableId="all-projects" 
             direction="horizontal" 
@@ -151,7 +155,7 @@ const HomePage: React.FC = () => {
               <div
                 {...provided.droppableProps}
                 ref={provided.innerRef}
-                className={`flex space-x-4 items-start pb-4 ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800 dragging-over' : ''}`}
+                className={`flex space-x-4 items-start pb-4 min-h-[200px] ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800 dragging-over' : ''}`}
               >
                 {boardData.projectOrder.map((projectId: string, index: number) => {
                   const project: ProjectColumn | undefined = boardData.projects[projectId];
@@ -199,3 +203,4 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
+
