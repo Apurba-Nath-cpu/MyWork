@@ -5,12 +5,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { APP_TITLE } from '../lib/constants'; 
+import { useToast } from "@/hooks/use-toast";
 
 type AuthTab = 'login' | 'signup';
 
 const AuthScreen: React.FC = () => {
   const { login, signUp } = useAuth();
   const { theme } = useTheme();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
 
   const inputBaseClass = "w-full p-3 border rounded-md focus:ring-2 focus:border-transparent text-sm sm:text-base";
@@ -61,7 +63,13 @@ const AuthScreen: React.FC = () => {
     setLoginLoading(true);
     const result = await login(loginEmail, loginPassword);
     if (!result.success) {
-      setLoginError(result.error || "Login failed. Please check your credentials.");
+      const errorMessage = result.error || "Login failed. Please check your credentials.";
+      setLoginError(errorMessage);
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
     setLoginLoading(false);
   };
@@ -77,21 +85,38 @@ const AuthScreen: React.FC = () => {
     else if (signupPassword.length < 6) errors.push("Password must be at least 6 characters long.");
 
     if (errors.length > 0) {
-      setSignupError(errors.join(' '));
+      const combinedError = errors.join(' ');
+      setSignupError(combinedError);
+      toast({
+        title: "Validation Error",
+        description: combinedError,
+        variant: "destructive",
+      });
       return;
     }
 
     setSignupLoading(true);
     const result = await signUp(signupEmail, signupPassword, signupName, signupRole, signupAvatarFile || undefined);
     if (!result.success) {
-      setSignupError(result.error || "Sign up failed. Please try again.");
+      const errorMessage = result.error || "Sign up failed. Please try again.";
+      setSignupError(errorMessage);
+      toast({
+        title: "Sign Up Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } else {
+      toast({
+        title: "Sign Up Successful!",
+        description: "Account created. If email confirmation is required, please check your inbox.",
+      });
       setSignupName('');
       setSignupEmail('');
       setSignupPassword('');
       setSignupRole(UserRole.MEMBER);
       setSignupAvatarFile(null);
       setSignupAvatarPreview(null);
+      setSignupError(null); 
     }
     setSignupLoading(false);
   };
@@ -100,7 +125,9 @@ const AuthScreen: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 2 * 1024 * 1024) { 
-        setSignupError("Avatar image must be less than 2MB.");
+        const errorMsg = "Avatar image must be less than 2MB.";
+        setSignupError(errorMsg);
+        toast({ title: "Upload Error", description: errorMsg, variant: "destructive" });
         setSignupAvatarFile(null);
         setSignupAvatarPreview(null);
         e.target.value = ''; 
@@ -209,3 +236,5 @@ const AuthScreen: React.FC = () => {
 };
 
 export default AuthScreen;
+
+    
