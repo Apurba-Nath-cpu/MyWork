@@ -6,10 +6,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { UserRole } from '../types';
 import type { UserCreationData } from '../types';
+import { useToast } from "@/hooks/use-toast";
 
 const CreateUserModal: React.FC = () => {
   const { createUser } = useAuth();
   const { showCreateUserModal, setShowCreateUserModal } = useData();
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState<UserCreationData>({
     name: '',
@@ -30,10 +32,20 @@ const CreateUserModal: React.FC = () => {
     setError(null);
     if (!formData.name.trim() || !formData.email.trim()) {
       setError('Name and Email are required.');
+      toast({
+        title: "Validation Error",
+        description: "Name and Email are required.",
+        variant: "destructive",
+      });
       return;
     }
-    if (!formData.email.includes('@')) { // Basic email format check
+    if (!formData.email.includes('@')) { 
         setError('Please enter a valid email address.');
+        toast({
+          title: "Validation Error",
+          description: "Please enter a valid email address.",
+          variant: "destructive",
+        });
         return;
     }
 
@@ -41,7 +53,24 @@ const CreateUserModal: React.FC = () => {
     if (result.success && result.user) {
       setFormData({ name: '', email: '', role: UserRole.MEMBER }); // Reset form
       setShowCreateUserModal(false);
+      toast({
+        title: "User Created",
+        description: `User profile for ${result.user.name} created successfully.`,
+      });
     } else {
+      if (result.isEmailConflict) {
+        toast({
+          title: "Error Creating User",
+          description: "A user with this email already exists.",
+          variant: "destructive",
+        });
+      } else {
+         toast({
+          title: "Error Creating User",
+          description: result.error || "Failed to create user profile.",
+          variant: "destructive",
+        });
+      }
       setError(result.error || 'Failed to create user profile.');
     }
   };
