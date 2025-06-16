@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, FormEvent, ChangeEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { UserRole } from '../types'; // UserRole might not be needed here anymore for signup form
+import { UserRole } from '../types'; 
 import { useTheme } from '../contexts/ThemeContext';
 import { APP_TITLE } from '../lib/constants'; 
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 type AuthTab = 'login' | 'signup';
 
 const AuthScreen: React.FC = () => {
-  const { login, signUp } = useAuth(); // signUp from context will handle Admin role and org creation
+  const { login, signUp } = useAuth(); 
   const { theme } = useTheme();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
@@ -41,8 +41,7 @@ const AuthScreen: React.FC = () => {
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [signupOrganizationName, setSignupOrganizationName] = useState(''); // New field
-  // const [signupRole, setSignupRole] = useState<UserRole>(UserRole.MEMBER); // Role is now ADMIN by default for this form
+  const [signupOrganizationName, setSignupOrganizationName] = useState(''); 
   const [signupAvatarFile, setSignupAvatarFile] = useState<File | null>(null);
   const [signupAvatarPreview, setSignupAvatarPreview] = useState<string | null>(null);
   const [signupError, setSignupError] = useState<string | null>(null);
@@ -78,7 +77,7 @@ const AuthScreen: React.FC = () => {
     setSignupLoading(true);
     let errors: string[] = [];
     if (!signupName.trim()) errors.push("Full Name is required.");
-    if (!signupOrganizationName.trim()) errors.push("Organization Name is required."); // Validation for new field
+    if (!signupOrganizationName.trim()) errors.push("Organization Name is required."); 
     if (!signupEmail.trim()) errors.push("Email is required.");
     else if (!validateEmail(signupEmail)) errors.push("Please enter a valid email address.");
     if (!signupPassword.trim()) errors.push("Password is required.");
@@ -96,30 +95,26 @@ const AuthScreen: React.FC = () => {
       return;
     }
 
-    // Role is implicitly ADMIN when signing up through this form
     const result = await signUp(signupEmail, signupPassword, signupName, signupOrganizationName, signupAvatarFile || undefined);
     if (!result.success) {
-      const errorMessage = result.error || "Sign up failed. Please try again.";
-      setSignupError(errorMessage);
+      let errorMessage = result.error || "Sign up failed. Please try again.";
+      // Specific error messages are now handled by AuthContext which passes them back.
+      // signUp in AuthContext sets more detailed error messages.
+      setSignupError(errorMessage); 
       toast({
         title: "Sign Up Failed",
         description: errorMessage,
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Sign Up Successful!",
-        description: "Account and Organization created. If email confirmation is required, please check your inbox.",
-      });
+      // Toast for success is handled in AuthContext now, based on email confirmation status
       setSignupName('');
       setSignupEmail('');
       setSignupPassword('');
       setSignupOrganizationName('');
-      // setSignupRole(UserRole.MEMBER); // Not needed
       setSignupAvatarFile(null);
       setSignupAvatarPreview(null);
       setSignupError(null); 
-      // User will be redirected by AuthContext on successful login after signup
     }
     setSignupLoading(false);
   };
@@ -213,7 +208,6 @@ const AuthScreen: React.FC = () => {
                   <label htmlFor="signupPassword" className={currentLabelClass}>Password (Admin)</label>
                   <input type="password" id="signupPassword" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Min. 6 characters" aria-required="true" />
                 </div>
-                {/* Role selection is removed - user signing up here is always ADMIN */}
                 <div>
                   <label htmlFor="signupAvatar" className={currentLabelClass}>Profile Picture (Optional, &lt;2MB)</label>
                   <input type="file" id="signupAvatar" onChange={handleAvatarChange} accept="image/png, image/jpeg, image/gif" className={`block w-full text-xs sm:text-sm file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold ${theme === 'dark' ? 'text-neutral-400 file:bg-primary-600 file:text-white hover:file:bg-primary-700' : 'text-neutral-600 file:bg-primary-100 file:text-primary-700 hover:file:bg-primary-200'}`} />
@@ -235,4 +229,3 @@ const AuthScreen: React.FC = () => {
 };
 
 export default AuthScreen;
-    

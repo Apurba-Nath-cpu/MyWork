@@ -16,7 +16,7 @@ const CreateUserModal: React.FC = () => {
   const [formData, setFormData] = useState<UserCreationData>({
     name: '',
     email: '',
-    role: UserRole.MEMBER, // Default role
+    role: UserRole.MEMBER, 
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -31,46 +31,26 @@ const CreateUserModal: React.FC = () => {
     e.preventDefault();
     setError(null);
     if (!formData.name.trim() || !formData.email.trim()) {
-      setError('Name and Email are required.');
-      toast({
-        title: "Validation Error",
-        description: "Name and Email are required.",
-        variant: "destructive",
-      });
+      const msg = 'Name and Email are required.';
+      setError(msg);
+      toast({ title: "Validation Error", description: msg, variant: "destructive" });
       return;
     }
     if (!formData.email.includes('@')) { 
-        setError('Please enter a valid email address.');
-        toast({
-          title: "Validation Error",
-          description: "Please enter a valid email address.",
-          variant: "destructive",
-        });
+        const msg = 'Please enter a valid email address.';
+        setError(msg);
+        toast({ title: "Validation Error", description: msg, variant: "destructive" });
         return;
     }
 
     const result = await createUser(formData.name, formData.email, formData.role);
     if (result.success && result.user) {
-      setFormData({ name: '', email: '', role: UserRole.MEMBER }); // Reset form
+      setFormData({ name: '', email: '', role: UserRole.MEMBER }); 
       setShowCreateUserModal(false);
-      toast({
-        title: "User Created",
-        description: `User profile for ${result.user.name} created successfully.`,
-      });
+      // Toast for success is handled in AuthContext's createUser
     } else {
-      if (result.isEmailConflict) {
-        toast({
-          title: "Error Creating User",
-          description: "A user with this email already exists.",
-          variant: "destructive",
-        });
-      } else {
-         toast({
-          title: "Error Creating User",
-          description: result.error || "Failed to create user profile.",
-          variant: "destructive",
-        });
-      }
+      // AuthContext's createUser handles detailed toasts for conflicts
+      // Set local error for display in modal if needed, AuthContext returns error message.
       setError(result.error || 'Failed to create user profile.');
     }
   };

@@ -4,7 +4,7 @@ import React, { createContext, useState, useContext, ReactNode, useCallback, use
 import { type User, UserRole, type Organization } from '../types';
 import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
-import type { SignUpError } from '../services/supabaseService';
+import type { SignUpError, CreateUserAccountError } from '../types'; // Use extended types
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
@@ -13,10 +13,10 @@ interface AuthContextType {
   users: User[]; // Users within the current user's organization
   loadingAuth: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }>;
   logout: () => Promise<void>;
-  createUser: (name: string, email: string, role: UserRole) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean}>;
-  fetchPublicUsers: () => Promise<void>; // Renamed for clarity, still fetches users for the current org
+  createUser: (name: string, email: string, role: UserRole) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}>;
+  fetchPublicUsers: () => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,15 +38,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           if (authUserFromSession) {
             const userProfile = await supabaseService.getUserProfile(authUserFromSession.id);
-            setCurrentUser(userProfile); // This will now include organization_id
+            setCurrentUser(userProfile); 
             if (!userProfile) {
               console.warn(`No profile found in public.users for authenticated user ID: ${authUserFromSession.id}.`);
             } else {
-              // Fetch users for the organization if the user is an Admin
-              if (userProfile.role === UserRole.ADMIN && userProfile.organization_id) {
+              if (userProfile.organization_id) { // Fetch users if user has an org_id
                 await fetchPublicUsers(userProfile.organization_id);
               } else {
-                setUsers([]); // Non-admins or users without org don't see other users list for now
+                setUsers([]); 
               }
             }
           } else {
@@ -66,15 +65,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []); // Removed fetchPublicUsers from dependencies to avoid loop, it's called conditionally
+  }, []); 
 
   const fetchPublicUsers = useCallback(async (organizationId?: string) => {
     const orgIdToFetch = organizationId || currentUser?.organization_id;
-    if (currentUser?.role === UserRole.ADMIN && orgIdToFetch) {
+    if (orgIdToFetch) { // Fetch users if there's an org ID, regardless of current user's role
         const fetchedUsers = await supabaseService.getUsers(orgIdToFetch);
         setUsers(fetchedUsers);
     } else {
-        setUsers([]); // Clear users if not admin or no orgId
+        setUsers([]); 
     }
   }, [currentUser]);
 
@@ -84,70 +83,65 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!success) {
         return { success: false, error: error?.message || 'Invalid credentials or network issue.'};
     }
-    // onAuthStateChange will handle setting currentUser and fetching org users
     return { success: true };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, name: string, organizationName: string, avatarFile?: File): Promise<{ success: boolean; error?: string }> => {
-    // This flow is for an Admin creating their account AND organization. Role is ADMIN.
+  const signUp = useCallback(async (email: string, password: string, name: string, organizationName: string, avatarFile?: File): Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }> => {
     const result = await supabaseService.signUpUserAndCreateOrg(email, password, name, organizationName, avatarFile);
 
-    if (!result.success) {
+    if (!result.success || !result.user) {
+      let errorMessage = result.error?.message || 'Could not create account and organization.';
       if (result.error?.isEmailConflict) {
-        return { success: false, error: "User with this email already exists. Please try logging in." };
+        errorMessage = "User with this email already exists. Please try logging in.";
+      } else if (result.error?.isOrgNameConflict) {
+        errorMessage = "Organization name is already taken. Please choose another.";
       }
-      return { success: false, error: result.error?.message || 'Could not create account and organization.' };
+      return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
-
-    if (result.user) {
-      const { data: sessionData } = await supabaseService.getSession();
-      if (!result.user.email_confirmed_at && sessionData.session === null) {
+    
+    // User will be logged in by onAuthStateChange
+    // Toast notification depends on email confirmation status
+    const { data: sessionData } = await supabaseService.getSession();
+    if (!result.user.email_confirmed_at && sessionData.session === null) {
         toast({
-          title: "Sign Up Successful!",
-          description: "Please check your email to confirm your account.",
+            title: "Sign Up Successful!",
+            description: "Please check your email to confirm your account.",
         });
-      } else {
-        toast({
-          title: "Sign Up Successful!",
-          description: "Account and organization created. You will be logged in automatically.",
+    } else {
+         toast({
+            title: "Sign Up Successful!",
+            description: "Account and organization created. You will be logged in automatically.",
         });
-      }
     }
-    // onAuthStateChange will handle setting currentUser and fetching org users
-    return { success: true };
+    return { success: true, isOrgNameConflict: false, isEmailConflict: false };
   }, [toast]);
 
   const logout = useCallback(async () => {
     setLoadingAuth(true);
     await supabaseService.signOutUser();
-    // onAuthStateChange will set currentUser to null
   }, []);
 
-  const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean}> => {
+  const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
     if (currentUser?.role !== UserRole.ADMIN || !currentUser.organization_id) {
-      toast({
-        title: "Permission Denied",
-        description: "Only Admins can create user profiles within their organization.",
-        variant: "destructive",
-      });
-      return { success: false, user: null, error: "Permission denied or no organization." };
+      const errMsg = "Only Admins can create user profiles within their organization.";
+      toast({ title: "Permission Denied", description: errMsg, variant: "destructive" });
+      return { success: false, user: null, error: errMsg };
     }
     const result = await supabaseService.createUserAccount(name, email, role, currentUser.organization_id);
+    
     if (result.user) {
       setUsers(prevUsers => [...prevUsers, result.user!].sort((a,b) => a.name.localeCompare(b.name)));
-      toast({
-        title: "User Created",
-        description: `User profile for ${result.user.name} created successfully.`,
-      });
+      toast({ title: "User Created", description: `User profile for ${result.user.name} created successfully.` });
       return { success: true, user: result.user };
     } else {
-      const errorMessage = result.error?.isEmailConflict ? "Email already in use." : (result.error?.message || `Failed to create user profile for ${name}.`);
-      toast({
-        title: "Error Creating User",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict };
+      let errorMessage = result.error?.message || `Failed to create user profile for ${name}.`;
+      if (result.error?.isEmailConflict) {
+        errorMessage = "A user with this email already exists.";
+      } else if (result.error?.isUsernameConflictInOrg) {
+        errorMessage = "A user with this username already exists in your organization.";
+      }
+      toast({ title: "Error Creating User", description: errorMessage, variant: "destructive" });
+      return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict, isUsernameConflictInOrg: result.error?.isUsernameConflictInOrg };
     }
   }, [currentUser, toast]);
 
@@ -165,4 +159,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-

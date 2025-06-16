@@ -91,3 +91,15 @@ export interface ConfirmationModalState {
   cancelText?: string;
 }
 
+// Extended Error types for Supabase service
+import type { AuthError, PostgrestError } from '@supabase/supabase-js';
+
+export interface SignUpError extends AuthError {
+  isEmailConflict?: boolean;
+  isOrgNameConflict?: boolean;
+}
+
+export interface CreateUserAccountError extends PostgrestError {
+  isEmailConflict?: boolean;
+  isUsernameConflictInOrg?: boolean; // For username conflict within the same organization
+}

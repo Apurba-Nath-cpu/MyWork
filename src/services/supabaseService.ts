@@ -1,6 +1,7 @@
 
-import { createClient, type SupabaseClient, type Session, type User as SupabaseAuthUser, type AuthError, type PostgrestError } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient, type Session, type User as SupabaseAuthUser, type AuthError as SupabaseAuthError, type PostgrestError as SupabasePostgrestError } from '@supabase/supabase-js';
 import { type BoardData, type ProjectColumn, type Task, type User, UserRole, TaskStatus, TaskPriority, type Organization } from '../types';
+import type { SignUpError, CreateUserAccountError } from '../types'; // Use extended types
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -16,15 +17,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export interface SignUpError extends AuthError {
-  isEmailConflict?: boolean;
-}
-
-export interface CreateUserAccountError extends PostgrestError {
-  isEmailConflict?: boolean;
-}
-
-
 // --- Authentication & Organization Functions ---
 export const signUpUserAndCreateOrg = async (
   email: string, 
@@ -34,9 +26,32 @@ export const signUpUserAndCreateOrg = async (
   avatarFile?: File
 ): Promise<{ success: boolean; error: SignUpError | null; user: SupabaseAuthUser | null }> => {
   console.log("Supabase: Signing up user and creating organization", { email, name, organizationName });
+
+  // Step 0: Check if organization name already exists
+  const { data: existingOrg, error: existingOrgQueryError } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('name', organizationName)
+    .maybeSingle();
+
+  if (existingOrgQueryError && existingOrgQueryError.code !== 'PGRST116') { // PGRST116 is 'Row not found'
+    console.error("Error checking for existing organization name:", existingOrgQueryError);
+    return { 
+        success: false, 
+        error: { name: "OrgQueryError", message: existingOrgQueryError.message } as SignUpError, 
+        user: null 
+    };
+  }
+  if (existingOrg) {
+    return { 
+        success: false, 
+        error: { name: "OrgNameConflictError", message: "Organization name already exists.", isOrgNameConflict: true } as SignUpError, 
+        user: null 
+    };
+  }
   
   let authData: { user: SupabaseAuthUser | null; session: Session | null; } | null = null;
-  let authError: AuthError | null = null;
+  let authError: SupabaseAuthError | null = null;
 
   // Step 1: Sign up the user with Supabase Auth
   try {
@@ -48,9 +63,9 @@ export const signUpUserAndCreateOrg = async (
     authError = error;
   } catch (e) {
     if (e instanceof Error) {
-        authError = { name: 'UnexpectedSignUpError', message: e.message } as AuthError;
+        authError = { name: 'UnexpectedSignUpError', message: e.message } as SupabaseAuthError;
     } else {
-        authError = { name: 'UnexpectedSignUpError', message: 'An unknown error occurred during sign up.' } as AuthError;
+        authError = { name: 'UnexpectedSignUpError', message: 'An unknown error occurred during sign up.' } as SupabaseAuthError;
     }
   }  
 
@@ -74,16 +89,13 @@ export const signUpUserAndCreateOrg = async (
 
   if (orgError || !orgData) {
     console.error("Error creating organization:", orgError);
-    // Potentially attempt to delete the authUser if org creation fails? Complex rollback.
-    // For now, return error. User might exist in auth but not in public.users or orgs.
-    return { 
-        success: false, 
-        error: { 
-            name: "OrganizationCreationError", 
-            message: orgError?.message || "Failed to create organization." 
-        } as SignUpError, 
-        user: authUser 
+    // If org creation fails (e.g. race condition on name if DB constraint is set), report it
+     const finalError: SignUpError = { 
+        name: "OrganizationCreationError", 
+        message: orgError?.message || "Failed to create organization.",
+        isOrgNameConflict: orgError?.code === '23505' // PostgreSQL unique violation code
     };
+    return { success: false, error: finalError, user: authUser };
   }
   const organizationId = orgData.id;
 
@@ -114,19 +126,18 @@ export const signUpUserAndCreateOrg = async (
       id: authUser.id, 
       name, 
       email: authUser.email, 
-      role: UserRole.ADMIN, // User signing up this way is always ADMIN
+      role: UserRole.ADMIN, 
       avatar_url: avatarPublicUrl,
       organization_id: organizationId
     }]);
 
   if (profileError) {
     console.error("Error creating user profile in public.users:", profileError);
-    // Complex rollback needed here too.
     const signUpError: SignUpError = {
         message: profileError.message || "Failed to create user profile.",
         name: "ProfileCreationError",
-        status: (profileError as PostgrestError).code ? parseInt((profileError as PostgrestError).code) : undefined,
-        isEmailConflict: (profileError as PostgrestError).code === '23505',
+        status: (profileError as SupabasePostgrestError).code ? parseInt((profileError as SupabasePostgrestError).code) : undefined,
+        isEmailConflict: (profileError as SupabasePostgrestError).code === '23505', // Check if it's a unique constraint violation on email
     } as SignUpError;
     return { success: false, error: signUpError, user: authUser };
   }
@@ -136,7 +147,7 @@ export const signUpUserAndCreateOrg = async (
 };
 
 export const signInUser = async (email: string, password: string): 
-  Promise<{ success: boolean; error: AuthError | null; user: SupabaseAuthUser | null }> => {
+  Promise<{ success: boolean; error: SupabaseAuthError | null; user: SupabaseAuthUser | null }> => {
   console.log("Supabase: Signing in user", { email });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
@@ -145,7 +156,7 @@ export const signInUser = async (email: string, password: string):
   return { success: true, error: null, user: data.user };
 };
 
-export const signOutUser = async (): Promise<{ error: AuthError | null }> => {
+export const signOutUser = async (): Promise<{ error: SupabaseAuthError | null }> => {
   console.log("Supabase: Signing out user");
   return await supabase.auth.signOut();
 };
@@ -185,25 +196,59 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 export const createUserAccount = async (name: string, email: string, role: UserRole, organizationId: string): 
   Promise<{user: User | null; error: CreateUserAccountError | null}> => {
   console.log("Supabase Admin: Creating user profile in public.users", { name, email, role, organizationId });
+  
   if (!email.includes('@')) {
-    const errorObj = { message: "Invalid email format.", code: "22000", details: "", hint: "" } as CreateUserAccountError; 
+    const errorObj: CreateUserAccountError = { message: "Invalid email format.", code: "22000", details: "", hint: "" }; 
     return { user: null, error: errorObj };
   }
+
+  // Check for username uniqueness within the organization
+  const { data: existingUserByName, error: nameCheckError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('name', name)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  if (nameCheckError && nameCheckError.code !== 'PGRST116') {
+    console.error("Error checking for existing username in org:", nameCheckError);
+    return { user: null, error: nameCheckError as CreateUserAccountError };
+  }
+  if (existingUserByName) {
+    return { user: null, error: { message: "Username already exists in this organization.", code: "23505", isUsernameConflictInOrg: true } as CreateUserAccountError };
+  }
+
+  // Check for global email uniqueness in public.users
+  const { data: existingUserByEmail, error: emailCheckError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (emailCheckError && emailCheckError.code !== 'PGRST116') {
+     console.error("Error checking for existing email:", emailCheckError);
+    return { user: null, error: emailCheckError as CreateUserAccountError };
+  }
+  if (existingUserByEmail) {
+    return { user: null, error: { message: "Email address is already in use.", code: "23505", isEmailConflict: true } as CreateUserAccountError };
+  }
+
   const avatarUrl = `https://picsum.photos/seed/${encodeURIComponent(email)}/40/40`; 
 
-  const { data, error } = await supabase
+  const { data, error: insertError } = await supabase
     .from('users')
     .insert([{ name, email, role, avatar_url: avatarUrl, organization_id: organizationId }]) 
     .select('id, name, email, role, avatar_url, organization_id')
     .single();
 
-  if (error) {
-    const createUserError: CreateUserAccountError = {
-      ...(error as PostgrestError),
-      isEmailConflict: (error as PostgrestError).code === '23505',
+  if (insertError) {
+    const finalError: CreateUserAccountError = {
+      ...(insertError as SupabasePostgrestError),
+      isEmailConflict: insertError.code === '23505' && insertError.message.includes('users_email_key'), // More specific check for email
+      isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_key'), // Check for composite key
     };
-    console.error("Supabase Admin: Error creating user profile in public.users:", createUserError);
-    return { user: null, error: createUserError };
+    console.error("Supabase Admin: Error creating user profile in public.users:", finalError);
+    return { user: null, error: finalError };
   }
   console.log("Supabase Admin: User profile created in public.users:", data);
   if (data) {
@@ -257,8 +302,8 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
   }
 
   const projectIds = (projectsData || []).map(p => p.id);
-  let tasksData: any[] = []; // Explicitly type if possible or use any for now
-  let tasksError: PostgrestError | null = null;
+  let tasksData: any[] = []; 
+  let tasksError: SupabasePostgrestError | null = null;
 
   if (projectIds.length > 0) {
       const { data, error } = await supabase
@@ -349,7 +394,6 @@ export const updateProject = async (updatedProject: ProjectColumn): Promise<bool
     .update({ 
       title: updatedProject.title, 
       maintainer_ids: updatedProject.maintainerIds 
-      // organization_id should not change during a simple update
     })
     .eq('id', updatedProject.id);
 
@@ -523,4 +567,3 @@ export const updateTaskProjectAndOrder = async (
     return false;
   }
 };
-
