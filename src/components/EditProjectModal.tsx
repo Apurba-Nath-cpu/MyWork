@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { ProjectColumn, UserRole } from '../types';
+import { ProjectColumn, UserRole } from '../types';
 
 interface EditProjectModalProps {
   project: ProjectColumn;

@@ -60,18 +60,18 @@ const AuthScreen: React.FC = () => {
       setLoginError("Please enter a valid email address.");
       return;
     }
-    setLoginLoading(true);
+    // setLoginLoading(true);
     const result = await login(loginEmail, loginPassword);
     if (!result.success) {
       const errorMessage = result.error || "Login failed. Please check your credentials.";
       setLoginError(errorMessage);
-      toast({
-        title: "Login Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      // toast({
+      //   title: "Login Failed",
+      //   description: errorMessage,
+      //   variant: "destructive",
+      // });
     }
-    setLoginLoading(false);
+    // setLoginLoading(false);
   };
 
   const handleSignup = async (e: FormEvent) => {
@@ -127,7 +127,7 @@ const AuthScreen: React.FC = () => {
       if (file.size > 2 * 1024 * 1024) { 
         const errorMsg = "Avatar image must be less than 2MB.";
         setSignupError(errorMsg);
-        toast({ title: "Upload Error", description: errorMsg, variant: "destructive" });
+        // toast({ title: "Upload Error", description: errorMsg, variant: "destructive" });
         setSignupAvatarFile(null);
         setSignupAvatarPreview(null);
         e.target.value = ''; 

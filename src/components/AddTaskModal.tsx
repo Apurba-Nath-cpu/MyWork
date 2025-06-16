@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { UserRole } from '../types';
+import { UserRole } from '../types';
 
 interface AddTaskModalProps {
   projectId: string;

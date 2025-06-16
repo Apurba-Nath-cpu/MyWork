@@ -1,7 +1,7 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import type { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState } from '../types';
+import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState } from '../types';
 import * as supabaseService from '../services/supabaseService'; 
 import { useAuth } from './AuthContext';
 

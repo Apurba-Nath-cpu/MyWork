@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { UserRole } from '../types';
+import { UserRole } from '../types';
 
 const AddProjectModal: React.FC = () => {
   const { showAddProjectModal, setShowAddProjectModal, addProject, usersForSuggestions } = useData();

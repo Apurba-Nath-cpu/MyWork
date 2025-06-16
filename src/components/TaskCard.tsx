@@ -3,7 +3,7 @@
 import React from 'react';
 import { Draggable } from 'react-beautiful-dnd';
 import type { DraggableProvided, DraggableStateSnapshot } from 'react-beautiful-dnd';
-import type { Task, UserRole } from '../types'; 
+import { Task, UserRole } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
 import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon } from './custom-icons'; 
 import { useData } from '../contexts/DataContext';

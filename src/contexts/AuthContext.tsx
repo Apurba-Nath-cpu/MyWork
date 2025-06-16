@@ -74,21 +74,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    setLoadingAuth(true);
+    // setLoadingAuth(true);
     const { success, error } = await supabaseService.signInUser(email, password);
     if (!success) {
-        setLoadingAuth(false);
+        // setLoadingAuth(false);
         return { success: false, error: error?.message || 'Invalid credentials or network issue.'};
     }
     return { success: true };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string, role: UserRole, avatarFile?: File): Promise<{ success: boolean; error?: string }> => {
-    setLoadingAuth(true);
+    // setLoadingAuth(true);
     const result = await supabaseService.signUpUser(email, password, name, role, avatarFile);
 
     if (!result.success) {
-      setLoadingAuth(false);
+      // setLoadingAuth(false);
       if (result.error?.isEmailConflict) {
         return { success: false, error: "User with this email already exists. Please try logging in." };
       }
@@ -97,6 +97,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (result.user) {
       const { data: sessionData } = await supabaseService.getSession();
+      // const { success, error } = await supabaseService.signInUser(email, password);
       if (!result.user.email_confirmed_at && sessionData.session === null) {
         toast({
           title: "Sign Up Successful!",
