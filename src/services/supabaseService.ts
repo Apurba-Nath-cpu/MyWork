@@ -175,10 +175,34 @@ export const onAuthStateChange = (callback: (event: string, session: Session | n
   return supabase.auth.onAuthStateChange(callback);
 };
 
-export const getSession = async () => {
+export const getSession = async (retriesLeft = 10, delayMs = 100): Promise<{ data: { session: any }, error: any }> => {
+  if (typeof window === 'undefined') {
+    console.log('⛔ Not in browser');
+    return { data: { session: null }, error: null };
+  }
+
+  if (supabase) console.log('🟢 Getting session...');
+  else console.log('🔴 Supabase not initialized');
+
   if (!supabase) return { data: { session: null }, error: null };
-  return await supabase.auth.getSession();
+
+  const { data: { session }, error } = await supabase.auth.getSession();
+
+  console.log('📦 Session result:', session);
+
+  if (session || retriesLeft <= 0) {
+    return { data: { session }, error };
+  }
+
+  console.log(`🔁 Retrying... attempts left: ${retriesLeft - 1}`);
+
+  // Wait for delayMs milliseconds before retrying
+  await new Promise((res) => setTimeout(res, delayMs));
+
+  // Recursively retry
+  return getSession(retriesLeft - 1, delayMs);
 };
+
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
   if (!supabase) return null;
