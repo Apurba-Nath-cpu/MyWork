@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useCallback, useEffect } from 'react';
-import { DragDropContext, Droppable } from 'react-beautiful-dnd';
+import { DragDropContext } from 'react-beautiful-dnd';
 import type { DroppableProvided, DroppableStateSnapshot } from 'react-beautiful-dnd';
 import type { DropResult, ProjectColumn, Task } from '../types'; 
 import { useTheme } from '../contexts/ThemeContext';
@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import Navbar from '../components/Navbar';
 import ProjectColumnComponent from '../components/ProjectColumn';
-import { DROPPABLE_TYPE_PROJECT, DROPPABLE_TYPE_TASK } from '../lib/constants';
+import { DROPPABLE_TYPE_PROJECT } from '../lib/constants';
 import AddProjectModal from '../components/AddProjectModal';
 import AddTaskModal from '../components/AddTaskModal';
 import CreateUserModal from '../components/CreateUserModal';
@@ -17,6 +17,7 @@ import EditProjectModal from '../components/EditProjectModal';
 import EditTaskModal from '../components/EditTaskModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuthScreen from '../components/AuthScreen';
+import StrictModeDroppable from '../components/StrictModeDroppable';
 
 
 const HomePage: React.FC = () => {
@@ -75,7 +76,7 @@ const HomePage: React.FC = () => {
       return;
     }
 
-    if (type === DROPPABLE_TYPE_TASK) {
+    if (type === 'TASK') {
       if (!boardData.tasks[draggableId]) {
           console.error(`onDragEnd: Task with ID ${draggableId} not found. Aborting task move.`);
           fetchBoardData(); 
@@ -143,7 +144,7 @@ const HomePage: React.FC = () => {
       <Navbar />
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex-grow p-4 overflow-x-auto"> 
-          <Droppable 
+          <StrictModeDroppable 
             droppableId="all-projects" 
             direction="horizontal" 
             type={DROPPABLE_TYPE_PROJECT}
@@ -179,7 +180,7 @@ const HomePage: React.FC = () => {
                 {provided.placeholder}
               </div>
             )}
-          </Droppable>
+          </StrictModeDroppable>
         </div>
       </DragDropContext>
       {showAddProjectModal && <AddProjectModal />}
@@ -203,4 +204,3 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
-
