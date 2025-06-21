@@ -34,6 +34,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         console.log('fetching session');
         const { data: { session } } = await supabaseService.getSession();
+        console.log('fetched session', session);
         if (session) {
           const userProfile = await supabaseService.getUserProfile(session.user.id);
           console.log('userProfile', userProfile);
