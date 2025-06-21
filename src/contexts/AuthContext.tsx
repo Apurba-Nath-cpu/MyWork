@@ -82,6 +82,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSupabaseUser(authUser);
         if (authUser) {
           // A login event occurred
+          console.log('in auth auth');
           const userProfile = await supabaseService.getUserProfile(authUser.id);
           setCurrentUser(userProfile);
           setLoadingAuth(false);
