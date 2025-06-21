@@ -6,16 +6,20 @@ import type { SignUpError, CreateUserAccountError } from '../types'; // Use exte
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  const SCRIPT_ERROR_MESSAGE = 'Supabase URL or Anon Key is not configured. Please check your .env file. App may not work correctly.';
-  console.error(SCRIPT_ERROR_MESSAGE);
-  if (typeof window !== 'undefined') {
-    alert(SCRIPT_ERROR_MESSAGE);
-  }
-  throw new Error(SCRIPT_ERROR_MESSAGE);
+// Conditionally initialize Supabase client
+export const supabase: SupabaseClient | null = (SUPABASE_URL && SUPABASE_ANON_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+if (!supabase) {
+  console.error('Supabase URL or Anon Key is not configured. Please check your .env file. The application will not connect to Supabase, but will continue to run.');
 }
 
-export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const createNotConfiguredError = (name: string) => ({
+  name,
+  message: "Supabase client is not configured. Please check environment variables.",
+});
+
 
 // --- Authentication & Organization Functions ---
 export const signUpUserAndCreateOrg = async (
@@ -25,6 +29,9 @@ export const signUpUserAndCreateOrg = async (
   organizationName: string, 
   avatarFile?: File
 ): Promise<{ success: boolean; error: SignUpError | null; user: SupabaseAuthUser | null }> => {
+  if (!supabase) {
+    return { success: false, error: createNotConfiguredError('ConfigurationError') as SignUpError, user: null };
+  }
   console.log("Supabase: Signing up user and creating organization", { email, name, organizationName });
 
   // Step 0: Check if organization name already exists
@@ -148,6 +155,7 @@ export const signUpUserAndCreateOrg = async (
 
 export const signInUser = async (email: string, password: string): 
   Promise<{ success: boolean; error: SupabaseAuthError | null; user: SupabaseAuthUser | null }> => {
+  if (!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError'), user: null };
   console.log("Supabase: Signing in user", { email });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
@@ -157,19 +165,23 @@ export const signInUser = async (email: string, password: string):
 };
 
 export const signOutUser = async (): Promise<{ error: SupabaseAuthError | null }> => {
+  if (!supabase) return { error: null };
   console.log("Supabase: Signing out user");
   return await supabase.auth.signOut();
 };
 
 export const onAuthStateChange = (callback: (event: string, session: Session | null) => void) => {
+  if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } };
   return supabase.auth.onAuthStateChange(callback);
 };
 
 export const getSession = async () => {
+  if (!supabase) return { data: { session: null }, error: null };
   return await supabase.auth.getSession();
 };
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
+  if (!supabase) return null;
   console.log("Supabase: Fetching user profile from public.users for ID:", userId);
   const { data, error } = await supabase
     .from('users')
@@ -195,6 +207,7 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 
 export const createUserAccount = async (name: string, email: string, role: UserRole, organizationId: string): 
   Promise<{user: User | null; error: CreateUserAccountError | null}> => {
+  if (!supabase) return { user: null, error: createNotConfiguredError('ConfigurationError') as CreateUserAccountError };
   console.log("Supabase Admin: Creating user profile in public.users", { name, email, role, organizationId });
   
   if (!email.includes('@')) {
@@ -272,7 +285,8 @@ export const deleteUserByAdmin = async (
   adminUserId: string, 
   organizationId: string
 ): Promise<{ success: boolean; error?: { message: string } }> => {
-  
+  if (!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError') };
+
   if (userIdToDelete === adminUserId) {
     return { success: false, error: { message: "Admin cannot delete themselves through this function." } };
   }
@@ -290,15 +304,10 @@ export const deleteUserByAdmin = async (
   }
 
   // Attempt to delete from auth.users
-  // This requires Supabase Admin privileges, typically via a service_role key on the backend.
-  // If the client's Supabase instance doesn't have these rights, this will fail.
-  // It's included here based on the assumption that if `supabase.auth.admin.deleteUser` was mentioned,
-  // it might be callable in this environment. Otherwise, this part should be handled by a backend function.
   try {
     const { error: deleteAuthUserError } = await supabase.auth.admin.deleteUser(userIdToDelete);
     if (deleteAuthUserError) {
       console.warn(`User profile ${userIdToDelete} deleted, but failed to delete auth user: ${deleteAuthUserError.message}. This may require manual cleanup or a backend admin call.`);
-      // Proceed as success for profile deletion, but warn about auth user.
     } else {
       console.log(`User ${userIdToDelete} (profile and auth) deleted by admin ${adminUserId}.`);
     }
@@ -311,6 +320,7 @@ export const deleteUserByAdmin = async (
 
 
 export const getUsers = async (organizationId: string): Promise<User[]> => {
+  if (!supabase) return [];
   console.log(`Supabase: Fetching user profiles from public.users for organization ID: ${organizationId}`);
   const { data, error } = await supabase
     .from('users')
@@ -332,6 +342,7 @@ export const getUsers = async (organizationId: string): Promise<User[]> => {
 };
 
 export const getBoardData = async (organizationId: string): Promise<BoardData> => {
+  if (!supabase) return { tasks: {}, projects: {}, projectOrder: [] };
   console.log(`Supabase: Fetching board data for organization ID: ${organizationId}`);
   const { data: projectsData, error: projectsError } = await supabase
     .from('projects')
@@ -409,6 +420,7 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
 };
 
 export const createProject = async (title: string, maintainerIds: string[], orderIndex: number, organizationId: string): Promise<ProjectColumn | null> => {
+  if (!supabase) return null;
   console.log("Supabase: Creating project", { title, maintainerIds, orderIndex, organizationId });
   const { data, error } = await supabase
     .from('projects')
@@ -431,6 +443,7 @@ export const createProject = async (title: string, maintainerIds: string[], orde
 };
 
 export const updateProject = async (updatedProject: ProjectColumn): Promise<boolean> => {
+  if (!supabase) return false;
   console.log("Supabase: Updating project", updatedProject.id);
   const { error } = await supabase
     .from('projects')
@@ -448,6 +461,7 @@ export const updateProject = async (updatedProject: ProjectColumn): Promise<bool
 };
 
 export const deleteProject = async (projectId: string): Promise<boolean> => {
+  if (!supabase) return false;
   console.log("Supabase: Deleting project", projectId);
   const { error } = await supabase.from('projects').delete().eq('id', projectId);
   if (error) {
@@ -468,6 +482,7 @@ export const createTask = async (
   priority: TaskPriority,
   tags: string[]
 ): Promise<Task | null> => {
+  if (!supabase) return null;
   console.log("Supabase: Creating task", { projectId, title, orderIndex, status, priority, tags });
   const taskToInsert = { 
       project_id: projectId, 
@@ -506,6 +521,7 @@ export const createTask = async (
 };
 
 export const updateTask = async (updatedTask: Task): Promise<boolean> => {
+  if (!supabase) return false;
   console.log("Supabase: Updating task", updatedTask.id);
   const { error } = await supabase
     .from('tasks')
@@ -529,6 +545,7 @@ export const updateTask = async (updatedTask: Task): Promise<boolean> => {
 };
 
 export const deleteTask = async (taskId: string): Promise<boolean> => {
+  if (!supabase) return false;
   console.log("Supabase: Deleting task", taskId);
   const { error } = await supabase.from('tasks').delete().eq('id', taskId);
   if (error) {
@@ -539,6 +556,7 @@ export const deleteTask = async (taskId: string): Promise<boolean> => {
 };
 
 export const updateProjectOrder = async (projectOrder: string[]): Promise<boolean> => {
+  if (!supabase) return false;
   console.log("Supabase: Updating project order");
   const updates = projectOrder.map((projectId, index) => 
     supabase.from('projects').update({ order_index: index }).eq('id', projectId)
@@ -556,6 +574,7 @@ export const updateProjectOrder = async (projectOrder: string[]): Promise<boolea
 };
 
 export const updateTaskOrderInProject = async (projectId: string, taskIds: string[]): Promise<boolean> => {
+  if (!supabase) return false;
   console.log(`Supabase: Updating task order in project ${projectId}`);
   const updates = taskIds.map((taskId, index) =>
     supabase.from('tasks').update({ order_index: index, project_id: projectId }).eq('id', taskId)
@@ -577,6 +596,7 @@ export const updateTaskProjectAndOrder = async (
   newProjectId: string, 
   newTaskIdsInNewProject: string[],
 ): Promise<boolean> => {
+  if (!supabase) return false;
   console.log(`Supabase: Moving task ${taskId} to project ${newProjectId} and updating order.`);
   
   const taskNewOrderIndex = newTaskIdsInNewProject.indexOf(taskId);
