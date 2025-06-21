@@ -40,6 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setCurrentUser(userProfile);
           setSupabaseUser(session.user);
         } else {
+          console.log('no session');
           setCurrentUser(null);
           setSupabaseUser(null);
         }
