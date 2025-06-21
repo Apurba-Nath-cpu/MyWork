@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCurrentUser(null);
         setSupabaseUser(null);
       } finally {
+        console.log('in finally auth');
         setLoadingAuth(false);
       }
     };
@@ -82,6 +83,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // A login event occurred
           const userProfile = await supabaseService.getUserProfile(authUser.id);
           setCurrentUser(userProfile);
+          setLoadingAuth(false);
         } else {
           // A logout event occurred
           setCurrentUser(null);
