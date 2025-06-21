@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: { session } } = await supabaseService.getSession(5, 100);
         console.log('fetched session', session);
         if (session) {
+          await new Promise(res => setTimeout(res, 100));
           const userProfile = await supabaseService.getUserProfile(session.user.id);
           console.log('userProfile', userProfile);
           setLoadingAuth(false);
@@ -82,6 +83,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSupabaseUser(authUser);
         if (authUser) {
           // A login event occurred
+          await new Promise(res => setTimeout(res, 100));
           console.log('in auth auth');
           const userProfile = await supabaseService.getUserProfile(authUser.id);
           setCurrentUser(userProfile);
