@@ -16,7 +16,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loadingAuth, setLoadingAuth] = useState(true);
   const { toast } = useToast();
 
-  const fetchPublicUsers = useCallback(async (organizationId: string | undefined) => {
+  const fetchPublicUsers = useCallback(async (organizationId: string) => {
     if (organizationId) {
         const fetchedUsers = await supabaseService.getUsers(organizationId);
         setUsers(fetchedUsers);
@@ -108,11 +108,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [toast]);
 
   const logout = useCallback(async () => {
-    setLoadingAuth(true);
     const { error } = await supabaseService.signOutUser();
 
     if (error) {
-      // Check for specific "no session" messages
+      // Check for specific "no session" messages which aren't really errors.
       if (error.message.includes("Auth session missing") || error.message.includes("No active session")) {
         console.log("Logout: No active session or session already invalid. Forcing client logout state.");
         // If the session was already missing, onAuthStateChange might not fire to update state.
@@ -120,21 +119,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCurrentUser(null);
         setUsers([]);
         setSupabaseUser(null);
-        setLoadingAuth(false); // Explicitly set loading to false
+        setLoadingAuth(false);
       } else {
         // For other unexpected errors, show a toast and ensure loading is stopped.
         console.error("Logout error:", error);
         toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
         setLoadingAuth(false);
       }
-    } else {
-      // If signOutUser is successful (no error), onAuthStateChange will be triggered.
-      // It will handle setting currentUser, users, supabaseUser to null, and setLoadingAuth to false.
-      // No immediate state change here to let onAuthStateChange be the source of truth.
-      // If onAuthStateChange is somehow delayed, "Authenticating..." might briefly show.
-      // For most cases, this works well.
     }
-  }, [toast, setCurrentUser, setUsers, setSupabaseUser, setLoadingAuth]);
+    // If signOutUser is successful (no error), onAuthStateChange will be triggered.
+    // It will handle setting currentUser to null and loadingAuth to false.
+  }, [toast]);
 
   const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
