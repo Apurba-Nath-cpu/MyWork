@@ -1,3 +1,4 @@
+
 'use client';
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { type User, UserRole, type Organization, type AuthContextType } from '../types';
@@ -196,26 +197,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [toast]);
 
-  const createUser = useCallback(async (name: string, email: string, role: UserRole, password: string): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
+  const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
-      const errMsg = "Only Admins can create user accounts within their organization.";
+      const errMsg = "Only Admins can invite new users to their organization.";
       toast({ title: "Permission Denied", description: errMsg, variant: "destructive" });
       return { success: false, user: null, error: errMsg };
     }
-    const result = await supabaseService.createUserWithAuth(name, email, password, role, currentUser.organization_id);
+    const result = await supabaseService.inviteUser(name, email, role, currentUser.organization_id);
     
     if (result.user) {
       await fetchPublicUsers(currentUser.organization_id);
-      toast({ title: "User Created", description: `User account for ${result.user.name} created successfully.` });
+      toast({ title: "Invitation Sent", description: `Invitation successfully sent to ${result.user.name}.` });
       return { success: true, user: result.user };
     } else {
-      let errorMessage = result.error?.message || `Failed to create user account for ${name}.`;
+      let errorMessage = result.error?.message || `Failed to invite ${name}.`;
       if (result.error?.isEmailConflict) {
         errorMessage = "A user with this email already exists.";
       } else if (result.error?.isUsernameConflictInOrg) {
         errorMessage = "A user with this name already exists in your organization.";
       }
-      toast({ title: "Error Creating User", description: errorMessage, variant: "destructive" });
+      toast({ title: "Error Sending Invitation", description: errorMessage, variant: "destructive" });
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict, isUsernameConflictInOrg: result.error?.isUsernameConflictInOrg };
     }
   }, [currentUser, toast, fetchPublicUsers]);

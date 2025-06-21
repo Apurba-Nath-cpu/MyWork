@@ -279,40 +279,36 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 };
 
 
-export const createUserWithAuth = async (
+export const inviteUser = async (
   name: string, 
   email: string, 
-  password: string,
   role: UserRole, 
   organizationId: string
 ): Promise<{ user: User | null; error: CreateUserAccountError | null }> => {
   if (!supabase) return { user: null, error: createNotConfiguredError('ConfigurationError') as CreateUserAccountError };
-  console.log("Supabase Admin: Creating user account with auth entry", { name, email, role, organizationId });
+  console.log("Supabase Admin: Inviting user", { name, email, role, organizationId });
 
-  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email: email,
-    password: password,
-    email_confirm: true, // Auto-confirm the email since an admin is creating it.
-    user_metadata: { name: name }
-  });
+  // This is an admin action, but it's designed to be called from a trusted client
+  // if your Supabase project settings allow it. It's safer than creating a user with a password.
+  const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
 
-  if (authError || !authData.user) {
-    console.error("Supabase Admin: Error creating auth user:", authError);
+  if (inviteError || !inviteData.user) {
+    console.error("Supabase Admin: Error inviting user:", inviteError);
     const finalError: CreateUserAccountError = {
-      message: authError?.message || 'Failed to create auth user.',
-      ...(authError as any),
-      isEmailConflict: authError?.message.toLowerCase().includes('email address already in use'),
+      message: inviteError?.message || 'Failed to send invitation.',
+      ...(inviteError as any),
+      isEmailConflict: inviteError?.message.toLowerCase().includes('user already registered'),
     };
     return { user: null, error: finalError };
   }
 
-  const authUser = authData.user;
+  const invitedUser = inviteData.user;
   const avatarUrl = `https://picsum.photos/seed/${encodeURIComponent(email)}/40/40`;
 
   const { data: profileData, error: profileError } = await supabase
     .from('users')
     .insert([{
-      id: authUser.id,
+      id: invitedUser.id,
       name: name,
       email: email,
       role: role,
@@ -324,8 +320,9 @@ export const createUserWithAuth = async (
 
   if (profileError) {
     console.error("Supabase Admin: Error creating user profile in public.users:", profileError);
-    await supabase.auth.admin.deleteUser(authUser.id);
-    console.warn(`Supabase Admin: Rolled back auth user creation for ${authUser.id} due to profile creation failure.`);
+    // If profile creation fails, we should ideally delete the invited user to prevent orphaned auth entries.
+    await supabase.auth.admin.deleteUser(invitedUser.id);
+    console.warn(`Supabase Admin: Rolled back auth user invitation for ${invitedUser.id} due to profile creation failure.`);
     
     const finalError: CreateUserAccountError = {
         ...(profileError as SupabasePostgrestError),
@@ -334,7 +331,7 @@ export const createUserWithAuth = async (
     return { user: null, error: finalError };
   }
 
-  console.log("Supabase Admin: User account created (auth + profile):", profileData);
+  console.log("Supabase Admin: User invited and profile created:", profileData);
   return {
     user: {
       id: profileData.id,
