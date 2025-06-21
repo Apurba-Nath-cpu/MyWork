@@ -26,36 +26,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []); 
 
-  // This effect handles the initial auth check and gets the current user's profile.
+  // This effect handles the initial auth check and subsequent auth state changes.
   useEffect(() => {
-    setLoadingAuth(true);
-    const { data: authListener } = supabaseService.onAuthStateChange(
-      async (_event: string, session: Session | null) => {
-        try {
-          const authUserFromSession = session?.user || null;
-          setSupabaseUser(authUserFromSession);
+    // 1. Check for an existing session on initial render
+    const checkInitialSession = async () => {
+      setLoadingAuth(true);
+      try {
+        const { data: { session } } = await supabaseService.getSession();
+        if (session) {
+          const userProfile = await supabaseService.getUserProfile(session.user.id);
+          setCurrentUser(userProfile);
+          setSupabaseUser(session.user);
+        } else {
+          setCurrentUser(null);
+          setSupabaseUser(null);
+        }
+      } catch (error) {
+        console.error("Error during initial session check:", error);
+        setCurrentUser(null);
+        setSupabaseUser(null);
+      } finally {
+        setLoadingAuth(false);
+      }
+    };
 
-          if (authUserFromSession) {
-            // Only fetch the current user's profile here
-            const userProfile = await supabaseService.getUserProfile(authUserFromSession.id);
-            setCurrentUser(userProfile);
-          } else {
-            setCurrentUser(null);
-          }
-        } catch (error) {
-            console.error("Error processing auth state change:", error);
-            setCurrentUser(null);
-        } finally {
-            // Authentication check is complete, hide the full-screen loader
-            setLoadingAuth(false);
+    checkInitialSession();
+
+    // 2. Set up a listener for subsequent auth events (e.g., login, logout in another tab)
+    const { data: authListener } = supabaseService.onAuthStateChange(
+      async (_event, session) => {
+        // The 'INITIAL_SESSION' event is handled by checkInitialSession, 
+        // so we can ignore it here to prevent redundant fetches and race conditions.
+        if (_event === 'INITIAL_SESSION') {
+          return;
+        }
+
+        const authUser = session?.user ?? null;
+        setSupabaseUser(authUser);
+        if (authUser) {
+          // A login event occurred
+          const userProfile = await supabaseService.getUserProfile(authUser.id);
+          setCurrentUser(userProfile);
+        } else {
+          // A logout event occurred
+          setCurrentUser(null);
         }
       }
     );
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
-  }, []); // Run only once on mount
+  }, []); // Run only once on component mount
+
 
   // This effect fetches the list of all users in the org *after* we know who the current user is.
   // This decouples it from the initial "Authenticating..." state.
@@ -70,17 +93,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    setLoadingAuth(true);
     const { success, error } = await supabaseService.signInUser(email, password);
     if (!success) {
-        setLoadingAuth(false);
         return { success: false, error: error?.message || 'Invalid credentials or network issue.'};
     }
     return { success: true };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string, organizationName: string, avatarFile?: File): Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }> => {
-    setLoadingAuth(true);
     const result = await supabaseService.signUpUserAndCreateOrg(email, password, name, organizationName, avatarFile);
 
     if (!result.success || !result.user) {
@@ -90,7 +110,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (result.error?.isOrgNameConflict) {
         errorMessage = "Organization name is already taken. Please choose another.";
       }
-      setLoadingAuth(false);
       return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
     
