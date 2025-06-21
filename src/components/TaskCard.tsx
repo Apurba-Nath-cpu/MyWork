@@ -1,8 +1,8 @@
 
 "use client";
 import React from 'react';
-import { Draggable } from 'react-beautiful-dnd';
-import type { DraggableProvided, DraggableStateSnapshot } from 'react-beautiful-dnd';
+import { Draggable } from '@hello-pangea/dnd';
+import type { DraggableProvided, DraggableStateSnapshot } from '@hello-pangea/dnd';
 import { Task, UserRole, TaskStatus, TaskPriority } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
 import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon, ExclamationTriangleIcon, CheckCircleIcon, CircleIcon, ClockIcon } from './custom-icons'; 

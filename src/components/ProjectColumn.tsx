@@ -1,8 +1,8 @@
 
 "use client";
 import React from 'react';
-import { Draggable } from 'react-beautiful-dnd';
-import type { DraggableProvided, DroppableProvided, DraggableStateSnapshot, DroppableStateSnapshot } from 'react-beautiful-dnd';
+import { Draggable, Droppable } from '@hello-pangea/dnd';
+import type { DraggableProvided, DroppableProvided, DraggableStateSnapshot, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import type { ProjectColumn, Task } from '../types';
 import TaskCard from './TaskCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +10,6 @@ import { useData } from '../contexts/DataContext';
 import { UserRole } from '../types';
 import { PlusIcon, TrashIcon, PencilIcon } from './custom-icons';
 import { DROPPABLE_TYPE_TASK } from '../lib/constants';
-import StrictModeDroppable from './StrictModeDroppable';
 
 interface ProjectColumnProps {
   project: ProjectColumn;
@@ -80,12 +79,9 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
             </div>
           </div>
           
-          <StrictModeDroppable 
+          <Droppable 
             droppableId={project.id} 
             type={DROPPABLE_TYPE_TASK}
-            isDropDisabled={false} 
-            isCombineEnabled={false} 
-            ignoreContainerClipping={false}
           >
             {(providedDroppable: DroppableProvided, snapshotDroppable: DroppableStateSnapshot) => (
               <div
@@ -105,7 +101,7 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
                 )}
               </div>
             )}
-          </StrictModeDroppable>
+          </Droppable>
 
           {canAddTask && (
             <button

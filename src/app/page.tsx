@@ -1,8 +1,8 @@
 
 "use client";
 import React, { useCallback, useEffect } from 'react';
-import { DragDropContext } from 'react-beautiful-dnd';
-import type { DroppableProvided, DroppableStateSnapshot } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable } from '@hello-pangea/dnd';
+import type { DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import type { DropResult, ProjectColumn, Task } from '../types'; 
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext'; 
@@ -17,7 +17,6 @@ import EditProjectModal from '../components/EditProjectModal';
 import EditTaskModal from '../components/EditTaskModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuthScreen from '../components/AuthScreen';
-import StrictModeDroppable from '../components/StrictModeDroppable';
 
 
 const HomePage: React.FC = () => {
@@ -144,19 +143,16 @@ const HomePage: React.FC = () => {
       <Navbar />
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex-grow p-4 overflow-x-auto"> 
-          <StrictModeDroppable 
+          <Droppable 
             droppableId="all-projects" 
             direction="horizontal" 
             type={DROPPABLE_TYPE_PROJECT}
-            isDropDisabled={false}
-            ignoreContainerClipping={true} 
-            isCombineEnabled={false}
           >
             {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
               <div
                 {...provided.droppableProps}
                 ref={provided.innerRef}
-                className={`flex w-max space-x-4 items-start p-2 ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800 dragging-over' : ''}`}
+                className={`flex w-max space-x-4 items-start p-2 ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800' : ''}`}
               >
                 {boardData.projectOrder.map((projectId: string, index: number) => {
                   const project: ProjectColumn | undefined = boardData.projects[projectId];
@@ -180,7 +176,7 @@ const HomePage: React.FC = () => {
                 {provided.placeholder}
               </div>
             )}
-          </StrictModeDroppable>
+          </Droppable>
         </div>
       </DragDropContext>
       {showAddProjectModal && <AddProjectModal />}

@@ -1,4 +1,7 @@
 
+import type { DropResult, DraggableLocation } from '@hello-pangea/dnd';
+export type { DropResult, DraggableLocation };
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   MAINTAINER = 'MAINTAINER',
@@ -59,20 +62,6 @@ export interface BoardData {
   tasks: Record<string, Task>;
   projects: Record<string, ProjectColumn>;
   projectOrder: string[]; // Ordered list of project IDs
-}
-
-// For react-beautiful-dnd
-export interface DraggableLocation {
-  droppableId: string;
-  index: number;
-}
-
-export interface DropResult {
-  draggableId:string;
-  type: string;
-  source: DraggableLocation;
-  destination?: DraggableLocation | null; // Nullable if dropped outside
-  reason?: 'DROP' | 'CANCEL';
 }
 
 export interface UserCreationData {
