@@ -241,30 +241,43 @@ export const getSession = async (
 export const getUserProfile = async (userId: string): Promise<User | null> => {
   if (!supabase) return null;
   console.log("Supabase: Fetching user profile from public.users for ID:", userId);
-  if(supabase) console.log('supabase:', supabase);
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, name, email, role, avatar_url, organization_id') 
-    .eq('id', userId)
-    .single();
-
-  console.log('📦 getUserProfile:', data, error);
   
-  if (error && error.code !== 'PGRST116') { 
-    console.error("Error fetching user profile:", error);
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, email, role, avatar_url, organization_id') 
+      .eq('id', userId)
+      .single();
+
+    console.log('📦 getUserProfile result:', { data, error });
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        console.warn('User profile not found for ID:', userId);
+        return null;
+      }
+      console.error("Error fetching user profile:", error);
+      throw error; // Re-throw non-404 errors
+    }
+    
+    if (data) {
+      return {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        role: data.role as UserRole,
+        avatarUrl: data.avatar_url,
+        organization_id: data.organization_id,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Exception in getUserProfile:", error);
+    throw error; // Let the caller handle the error
   }
-  if (data) {
-    return {
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      role: data.role as UserRole,
-      avatarUrl: data.avatar_url,
-      organization_id: data.organization_id,
-    };
-  }
-  return null;
 };
+
 
 export const createUserAccount = async (name: string, email: string, role: UserRole, organizationId: string): 
   Promise<{user: User | null; error: CreateUserAccountError | null}> => {

@@ -1,4 +1,3 @@
-
 'use client';
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { type User, UserRole, type Organization, type AuthContextType } from '../types';
@@ -15,13 +14,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [supabaseUser, setSupabaseUser] = useState<SupabaseAuthUser | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  // const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
-  // const router = useRouter();
-
-  // useEffect(() => {
-    // setIsMounted(true);
-  // }, []);
 
   const fetchPublicUsers = useCallback(async (organizationId: string) => {
     if (organizationId) {
@@ -33,87 +26,121 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []); 
 
-  // This effect handles the initial auth check and subsequent auth state changes.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    // 1. Check for an existing session on initial render
-    const checkInitialSession = async () => {
-      setLoadingAuth(true);
+  // Centralized function to handle user profile fetching with timeout
+  const fetchUserProfileWithTimeout = useCallback(async (userId: string, timeoutMs = 10000): Promise<User | null> => {
+    try {
+      const profilePromise = supabaseService.getUserProfile(userId);
+      const timeoutPromise = new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), timeoutMs)
+      );
+      
+      const userProfile = await Promise.race([profilePromise, timeoutPromise]);
+      return userProfile;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+  }, []);
+
+  // Centralized function to handle auth user changes
+  const handleAuthUserChange = useCallback(async (authUser: SupabaseAuthUser | null, isInitialLoad = false) => {
+    console.log('handleAuthUserChange called:', { userId: authUser?.id, isInitialLoad });
+    
+    setSupabaseUser(authUser);
+    
+    if (authUser) {
       try {
-        console.log('fetching session');
-        const { data: { session } } = await supabaseService.getSession(5, 100);
-        console.log('fetched session', session);
-        if (session) {
-          await new Promise(res => setTimeout(res, 400));
-          const userProfile = await supabaseService.getUserProfile(session.user.id);
-          console.log('userProfile', userProfile);
-          setLoadingAuth(false);
+        // Add a small delay only for non-initial loads to ensure session is fully established
+        if (!isInitialLoad) {
+          await new Promise(res => setTimeout(res, 200));
+        }
+        
+        const userProfile = await fetchUserProfileWithTimeout(authUser.id);
+        console.log('Fetched userProfile:', userProfile);
+        
+        if (userProfile) {
           setCurrentUser(userProfile);
-          setSupabaseUser(session.user);
         } else {
-          console.log('no session');
+          console.warn('Failed to fetch user profile, clearing auth state');
           setCurrentUser(null);
           setSupabaseUser(null);
         }
       } catch (error) {
-        console.error("Error during initial session check:", error);
+        console.error('Error in handleAuthUserChange:', error);
         setCurrentUser(null);
         setSupabaseUser(null);
-      } finally {
-        console.log('in finally auth');
-        setLoadingAuth(false);
       }
-    };
+    } else {
+      setCurrentUser(null);
+    }
+    
+    setLoadingAuth(false);
+  }, [fetchUserProfileWithTimeout]);
 
-    checkInitialSession();
+  // Single useEffect to handle all auth state
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-    // router.events.on('routeChangeComplete', checkInitialSession);
-    // window.addEventListener('pageshow', checkInitialSession);
+    let mounted = true;
+    let authListenerData: { data: { subscription: { unsubscribe: () => void } } } | null = null;
 
-    // 2. Set up a listener for subsequent auth events (e.g., login, logout in another tab)
-    const { data: authListener } = supabaseService.onAuthStateChange(
-      async (_event, session) => {
-        // The 'INITIAL_SESSION' event is handled by checkInitialSession, 
-        // so we can ignore it here to prevent redundant fetches and race conditions.
-        // return;
-        // if (_event === 'INITIAL_SESSION') {
-        // }
+    const initializeAuth = async () => {
+      try {
+        console.log('Initializing auth...');
+        
+        // Get initial session with a shorter timeout
+        const { data: { session } } = await supabaseService.getSession(3, 100, 5000);
+        console.log('Initial session:', session);
+        
+        if (mounted) {
+          if (session?.user) {
+            await handleAuthUserChange(session.user, true);
+          } else {
+            setLoadingAuth(false);
+          }
+        }
 
-        const authUser = session?.user ?? null;
-        setSupabaseUser(authUser);
-        if (authUser) {
-          // A login event occurred
-          await new Promise(res => setTimeout(res, 400));
-          console.log('in auth auth');
-          const userProfile = await supabaseService.getUserProfile(authUser.id);
-          setCurrentUser(userProfile);
+        // Set up auth state listener
+        if (mounted) {
+          authListenerData = supabaseService.onAuthStateChange(async (event, session) => {
+            console.log('Auth state change:', event, session?.user?.id);
+            
+            // Skip INITIAL_SESSION as we handled it above
+            if (event === 'INITIAL_SESSION') {
+              return;
+            }
+            
+            if (mounted) {
+              await handleAuthUserChange(session?.user ?? null, false);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        if (mounted) {
           setLoadingAuth(false);
-        } else {
-          // A logout event occurred
-          setCurrentUser(null);
         }
       }
-    );
+    };
+
+    initializeAuth();
 
     return () => {
-      authListener.subscription.unsubscribe();
-      // window.removeEventListener('pageshow', checkInitialSession);
-      // router.events.off('routeChangeComplete', checkInitialSession);
+      mounted = false;
+      if (authListenerData) {
+        authListenerData.data.subscription.unsubscribe();
+      }
     };
-  }, []); // Run only once on component mount
-
+  }, [handleAuthUserChange]);
 
   // This effect fetches the list of all users in the org *after* we know who the current user is.
-  // This decouples it from the initial "Authenticating..." state.
   useEffect(() => {
     if (currentUser?.organization_id) {
       fetchPublicUsers(currentUser.organization_id);
     } else {
-      // If there's no current user or they have no org, clear the users list.
       setUsers([]);
     }
   }, [currentUser, fetchPublicUsers]);
-
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     const { success, error } = await supabaseService.signInUser(email, password);
@@ -216,7 +243,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: result.error?.message };
     }
   }, [currentUser, toast, fetchPublicUsers]);
-
 
   return (
     <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, createUser, deleteUserByAdmin, fetchPublicUsers }}>
