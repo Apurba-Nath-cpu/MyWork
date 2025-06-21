@@ -68,7 +68,7 @@ export interface UserCreationData {
   name: string;
   email: string;
   role: UserRole;
-  // organization_id will be handled by the context
+  password?: string;
 }
 
 export interface ConfirmationModalState {
@@ -104,7 +104,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }>;
   logout: () => Promise<void>;
-  createUser: (name: string, email: string, role: UserRole) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}>;
+  createUser: (name: string, email: string, role: UserRole, password: string) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}>;
   deleteUserByAdmin: (userIdToDelete: string) => Promise<{ success: boolean; error?: string }>;
   fetchPublicUsers: (organizationId: string) => Promise<void>; 
 }

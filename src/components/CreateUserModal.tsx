@@ -16,8 +16,10 @@ const CreateUserModal: React.FC = () => {
   const [formData, setFormData] = useState<UserCreationData>({
     name: '',
     email: '',
-    role: UserRole.MEMBER, 
+    role: UserRole.MEMBER,
+    password: '',
   });
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -27,11 +29,17 @@ const CreateUserModal: React.FC = () => {
     });
   };
 
+  const resetForm = () => {
+      setFormData({ name: '', email: '', role: UserRole.MEMBER, password: '' });
+      setConfirmPassword('');
+      setError(null);
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!formData.name.trim() || !formData.email.trim()) {
-      const msg = 'Name and Email are required.';
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
+      const msg = 'Name, Email, and Password are required.';
       setError(msg);
       toast({ title: "Validation Error", description: msg, variant: "destructive" });
       return;
@@ -42,26 +50,36 @@ const CreateUserModal: React.FC = () => {
         toast({ title: "Validation Error", description: msg, variant: "destructive" });
         return;
     }
+    if (formData.password.length < 6) {
+        const msg = 'Password must be at least 6 characters long.';
+        setError(msg);
+        toast({ title: "Validation Error", description: msg, variant: "destructive" });
+        return;
+    }
+    if (formData.password !== confirmPassword) {
+        const msg = 'Passwords do not match.';
+        setError(msg);
+        toast({ title: "Validation Error", description: msg, variant: "destructive" });
+        return;
+    }
 
-    const result = await createUser(formData.name, formData.email, formData.role);
+    const result = await createUser(formData.name, formData.email, formData.role, formData.password);
     if (result.success && result.user) {
-      setFormData({ name: '', email: '', role: UserRole.MEMBER }); 
+      resetForm();
       setShowCreateUserModal(false);
-      // Toast for success is handled in AuthContext's createUser
     } else {
-      // AuthContext's createUser handles detailed toasts for conflicts
-      // Set local error for display in modal if needed, AuthContext returns error message.
-      setError(result.error || 'Failed to create user profile.');
+      setError(result.error || 'Failed to create user.');
     }
   };
 
   if (!showCreateUserModal) return null;
 
   return (
-    <Modal isOpen={showCreateUserModal} onClose={() => setShowCreateUserModal(false)} title="Create New User Profile">
-      <form onSubmit={handleSubmit} aria-labelledby="modal-title-create-user">
-        {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 dark:bg-opacity-30 p-2 rounded text-center">{error}</p>}
-        <div className="mb-4">
+    <Modal isOpen={showCreateUserModal} onClose={() => { setShowCreateUserModal(false); resetForm(); }} title="Create New User Account">
+      <form onSubmit={handleSubmit} aria-labelledby="modal-title-create-user" className="space-y-4">
+        {error && <p className="text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 dark:bg-opacity-30 p-2 rounded text-center">{error}</p>}
+        
+        <div>
           <label htmlFor="userName" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Full Name
           </label>
@@ -76,7 +94,7 @@ const CreateUserModal: React.FC = () => {
           />
         </div>
 
-        <div className="mb-4">
+        <div>
           <label htmlFor="userEmail" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Email Address
           </label>
@@ -91,7 +109,37 @@ const CreateUserModal: React.FC = () => {
           />
         </div>
 
-        <div className="mb-4">
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
+        
+        <div>
+          <label htmlFor="confirmPassword" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            Confirm Password
+          </label>
+          <input
+            type="password"
+            id="confirmPassword"
+            name="confirmPassword"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
+
+        <div>
           <label htmlFor="userRole" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Role
           </label>
@@ -115,8 +163,7 @@ const CreateUserModal: React.FC = () => {
             type="button"
             onClick={() => {
                 setShowCreateUserModal(false);
-                setError(null);
-                setFormData({ name: '', email: '', role: UserRole.MEMBER });
+                resetForm();
             }}
             className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100 dark:bg-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-500 border border-neutral-300 dark:border-neutral-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
           >

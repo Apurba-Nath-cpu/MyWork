@@ -279,79 +279,73 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 };
 
 
-export const createUserAccount = async (name: string, email: string, role: UserRole, organizationId: string): 
-  Promise<{user: User | null; error: CreateUserAccountError | null}> => {
+export const createUserWithAuth = async (
+  name: string, 
+  email: string, 
+  password: string,
+  role: UserRole, 
+  organizationId: string
+): Promise<{ user: User | null; error: CreateUserAccountError | null }> => {
   if (!supabase) return { user: null, error: createNotConfiguredError('ConfigurationError') as CreateUserAccountError };
-  console.log("Supabase Admin: Creating user profile in public.users", { name, email, role, organizationId });
-  
-  if (!email.includes('@')) {
-    const errorObj: CreateUserAccountError = { message: "Invalid email format.", code: "22000", details: "", hint: "" }; 
-    return { user: null, error: errorObj };
+  console.log("Supabase Admin: Creating user account with auth entry", { name, email, role, organizationId });
+
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email: email,
+    password: password,
+    email_confirm: true, // Auto-confirm the email since an admin is creating it.
+    user_metadata: { name: name }
+  });
+
+  if (authError || !authData.user) {
+    console.error("Supabase Admin: Error creating auth user:", authError);
+    const finalError: CreateUserAccountError = {
+      message: authError?.message || 'Failed to create auth user.',
+      ...(authError as any),
+      isEmailConflict: authError?.message.toLowerCase().includes('email address already in use'),
+    };
+    return { user: null, error: finalError };
   }
 
-  // Check for username uniqueness within the organization
-  const { data: existingUserByName, error: nameCheckError } = await supabase
+  const authUser = authData.user;
+  const avatarUrl = `https://picsum.photos/seed/${encodeURIComponent(email)}/40/40`;
+
+  const { data: profileData, error: profileError } = await supabase
     .from('users')
-    .select('id')
-    .eq('name', name)
-    .eq('organization_id', organizationId)
-    .maybeSingle();
-
-  if (nameCheckError && nameCheckError.code !== 'PGRST116') {
-    console.error("Error checking for existing username in org:", nameCheckError);
-    return { user: null, error: nameCheckError as CreateUserAccountError };
-  }
-  if (existingUserByName) {
-    return { user: null, error: { message: "Username already exists in this organization.", code: "23505", isUsernameConflictInOrg: true } as CreateUserAccountError };
-  }
-
-  // Check for global email uniqueness in public.users
-  const { data: existingUserByEmail, error: emailCheckError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (emailCheckError && emailCheckError.code !== 'PGRST116') {
-     console.error("Error checking for existing email:", emailCheckError);
-    return { user: null, error: emailCheckError as CreateUserAccountError };
-  }
-  if (existingUserByEmail) {
-    return { user: null, error: { message: "Email address is already in use.", code: "23505", isEmailConflict: true } as CreateUserAccountError };
-  }
-
-  const avatarUrl = `https://picsum.photos/seed/${encodeURIComponent(email)}/40/40`; 
-
-  const { data, error: insertError } = await supabase
-    .from('users')
-    .insert([{ name, email, role, avatar_url: avatarUrl, organization_id: organizationId }]) 
+    .insert([{
+      id: authUser.id,
+      name: name,
+      email: email,
+      role: role,
+      avatar_url: avatarUrl,
+      organization_id: organizationId
+    }])
     .select('id, name, email, role, avatar_url, organization_id')
     .single();
 
-  if (insertError) {
+  if (profileError) {
+    console.error("Supabase Admin: Error creating user profile in public.users:", profileError);
+    await supabase.auth.admin.deleteUser(authUser.id);
+    console.warn(`Supabase Admin: Rolled back auth user creation for ${authUser.id} due to profile creation failure.`);
+    
     const finalError: CreateUserAccountError = {
-      ...(insertError as SupabasePostgrestError),
-      isEmailConflict: insertError.code === '23505' && insertError.message.includes('users_email_unique'), 
-      isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_unique'),
+        ...(profileError as SupabasePostgrestError),
+        isUsernameConflictInOrg: profileError.code === '23505' && profileError.message.includes('users_name_organization_id_unique'),
     };
-    console.error("Supabase Admin: Error creating user profile in public.users:", finalError);
     return { user: null, error: finalError };
   }
-  console.log("Supabase Admin: User profile created in public.users:", data);
-  if (data) {
-    return { 
-      user: {
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        role: data.role as UserRole,
-        avatarUrl: data.avatar_url,
-        organization_id: data.organization_id,
-      }, 
-      error: null 
-    };
-  }
-  return { user: null, error: { message: "Unknown error creating user profile", code: "00000", details:"", hint:"" } as CreateUserAccountError };
+
+  console.log("Supabase Admin: User account created (auth + profile):", profileData);
+  return {
+    user: {
+      id: profileData.id,
+      name: profileData.name,
+      email: profileData.email,
+      role: profileData.role as UserRole,
+      avatarUrl: profileData.avatar_url,
+      organization_id: profileData.organization_id,
+    },
+    error: null
+  };
 };
 
 export const deleteUserByAdmin = async (

@@ -196,24 +196,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [toast]);
 
-  const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
+  const createUser = useCallback(async (name: string, email: string, role: UserRole, password: string): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
-      const errMsg = "Only Admins can create user profiles within their organization.";
+      const errMsg = "Only Admins can create user accounts within their organization.";
       toast({ title: "Permission Denied", description: errMsg, variant: "destructive" });
       return { success: false, user: null, error: errMsg };
     }
-    const result = await supabaseService.createUserAccount(name, email, role, currentUser.organization_id);
+    const result = await supabaseService.createUserWithAuth(name, email, password, role, currentUser.organization_id);
     
     if (result.user) {
       await fetchPublicUsers(currentUser.organization_id);
-      toast({ title: "User Created", description: `User profile for ${result.user.name} created successfully.` });
+      toast({ title: "User Created", description: `User account for ${result.user.name} created successfully.` });
       return { success: true, user: result.user };
     } else {
-      let errorMessage = result.error?.message || `Failed to create user profile for ${name}.`;
+      let errorMessage = result.error?.message || `Failed to create user account for ${name}.`;
       if (result.error?.isEmailConflict) {
         errorMessage = "A user with this email already exists.";
       } else if (result.error?.isUsernameConflictInOrg) {
-        errorMessage = "A user with this username already exists in your organization.";
+        errorMessage = "A user with this name already exists in your organization.";
       }
       toast({ title: "Error Creating User", description: errorMessage, variant: "destructive" });
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict, isUsernameConflictInOrg: result.error?.isUsernameConflictInOrg };
