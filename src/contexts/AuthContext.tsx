@@ -1,11 +1,12 @@
 
-"use client";
+'use client';
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { type User, UserRole, type Organization, type AuthContextType } from '../types';
 import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import type { SignUpError, CreateUserAccountError } from '../types'; 
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from 'next/router';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -14,7 +15,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [supabaseUser, setSupabaseUser] = useState<SupabaseAuthUser | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  // const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
+  // const router = useRouter();
+
+  // useEffect(() => {
+    // setIsMounted(true);
+  // }, []);
 
   const fetchPublicUsers = useCallback(async (organizationId: string) => {
     if (organizationId) {
@@ -28,6 +35,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // This effect handles the initial auth check and subsequent auth state changes.
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     // 1. Check for an existing session on initial render
     const checkInitialSession = async () => {
       setLoadingAuth(true);
@@ -56,6 +64,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     checkInitialSession();
 
+    // router.events.on('routeChangeComplete', checkInitialSession);
+    // window.addEventListener('pageshow', checkInitialSession);
+
     // 2. Set up a listener for subsequent auth events (e.g., login, logout in another tab)
     const { data: authListener } = supabaseService.onAuthStateChange(
       async (_event, session) => {
@@ -80,6 +91,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return () => {
       authListener.subscription.unsubscribe();
+      // window.removeEventListener('pageshow', checkInitialSession);
+      // router.events.off('routeChangeComplete', checkInitialSession);
     };
   }, []); // Run only once on component mount
 
