@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setLoadingAuth(true);
       try {
         console.log('fetching session');
-        const { data: { session } } = await supabaseService.getSession(3, 100);
+        const { data: { session } } = await supabaseService.getSession(5, 100);
         console.log('fetched session', session);
         if (session) {
           const userProfile = await supabaseService.getUserProfile(session.user.id);

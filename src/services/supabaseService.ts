@@ -175,7 +175,11 @@ export const onAuthStateChange = (callback: (event: string, session: Session | n
   return supabase.auth.onAuthStateChange(callback);
 };
 
-export const getSession = async (retriesLeft = 10, delayMs = 100): Promise<{ data: { session: any }, error: any }> => {
+export const getSession = async (
+  retriesLeft: number = 10,
+  delayMs: number = 100,
+  timeoutMs: number = 300
+): Promise<{ data: { session: any }, error: any }> => {
   if (typeof window === 'undefined') {
     console.log('⛔ Not in browser');
     return { data: { session: null }, error: null };
@@ -185,23 +189,42 @@ export const getSession = async (retriesLeft = 10, delayMs = 100): Promise<{ dat
   else console.log('🔴 Supabase not initialized');
 
   if (!supabase) return { data: { session: null }, error: null };
-
-  const { data: { session }, error } = await supabase.auth.getSession();
-
-  console.log('📦 Session result:', session);
-
-  if (session || retriesLeft <= 0) {
-    return { data: { session }, error };
-  }
-
-  console.log(`🔁 Retrying... attempts left: ${retriesLeft - 1}`);
-
   // Wait for delayMs milliseconds before retrying
   await new Promise((res) => setTimeout(res, delayMs));
 
-  // Recursively retry
-  return getSession(retriesLeft - 1, delayMs);
+  try {
+    const sessionPromise = supabase.auth.getSession();
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('⏰ Session fetch timed out')), timeoutMs)
+    );
+
+    const { data: { session }, error } = await Promise.race([
+      sessionPromise,
+      timeoutPromise,
+    ]) as { data: { session: any }, error: any };
+
+    console.log('📦 Session result:', session);
+
+    if (session || retriesLeft <= 0) {
+      return { data: { session }, error };
+    }
+
+    console.log(`🔁 Retrying... attempts left: ${retriesLeft - 1}`);
+  } catch (err: any) {
+    console.warn(`⚠️ Error or timeout: ${err.message}`);
+    if (retriesLeft <= 0) {
+      return { data: { session: null }, error: err };
+    }
+  }
+
+  // Wait for delayMs before retrying
+  await new Promise((res) => setTimeout(res, delayMs));
+
+  // Recursive retry
+  return getSession(retriesLeft - 1, delayMs, timeoutMs);
 };
+
 
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
