@@ -117,5 +117,5 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   createUser: (name: string, email: string, role: UserRole) => Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}>;
   deleteUserByAdmin: (userIdToDelete: string) => Promise<{ success: boolean; error?: string }>;
-  fetchPublicUsers: () => Promise<void>; 
+  fetchPublicUsers: (organizationId: string) => Promise<void>; 
 }

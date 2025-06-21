@@ -26,6 +26,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []); 
 
+  // This effect handles the initial auth check and gets the current user's profile.
   useEffect(() => {
     setLoadingAuth(true);
     const { data: authListener } = supabaseService.onAuthStateChange(
@@ -35,28 +36,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setSupabaseUser(authUserFromSession);
 
           if (authUserFromSession) {
+            // Only fetch the current user's profile here
             const userProfile = await supabaseService.getUserProfile(authUserFromSession.id);
-            setCurrentUser(userProfile); 
-            if (!userProfile) {
-              console.warn(`No profile found in public.users for authenticated user ID: ${authUserFromSession.id}.`);
-              setUsers([]); 
-            } else {
-              if (userProfile.organization_id) { 
-                await fetchPublicUsers(userProfile.organization_id);
-              } else {
-                console.warn(`User profile ${userProfile.id} does not have an organization_id.`);
-                setUsers([]); 
-              }
-            }
+            setCurrentUser(userProfile);
           } else {
             setCurrentUser(null);
-            setUsers([]);
           }
         } catch (error) {
             console.error("Error processing auth state change:", error);
             setCurrentUser(null);
-            setUsers([]);
         } finally {
+            // Authentication check is complete, hide the full-screen loader
             setLoadingAuth(false);
         }
       }
@@ -65,7 +55,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [fetchPublicUsers]);
+  }, []); // Run only once on mount
+
+  // This effect fetches the list of all users in the org *after* we know who the current user is.
+  // This decouples it from the initial "Authenticating..." state.
+  useEffect(() => {
+    if (currentUser?.organization_id) {
+      fetchPublicUsers(currentUser.organization_id);
+    } else {
+      // If there's no current user or they have no org, clear the users list.
+      setUsers([]);
+    }
+  }, [currentUser, fetchPublicUsers]);
+
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setLoadingAuth(true);
@@ -111,24 +113,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { error } = await supabaseService.signOutUser();
 
     if (error) {
-      // Check for specific "no session" messages which aren't really errors.
       if (error.message.includes("Auth session missing") || error.message.includes("No active session")) {
         console.log("Logout: No active session or session already invalid. Forcing client logout state.");
-        // If the session was already missing, onAuthStateChange might not fire to update state.
-        // So, manually update client state to reflect logged-out status immediately.
         setCurrentUser(null);
         setUsers([]);
         setSupabaseUser(null);
         setLoadingAuth(false);
       } else {
-        // For other unexpected errors, show a toast and ensure loading is stopped.
         console.error("Logout error:", error);
         toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
         setLoadingAuth(false);
       }
     }
-    // If signOutUser is successful (no error), onAuthStateChange will be triggered.
-    // It will handle setting currentUser to null and loadingAuth to false.
   }, [toast]);
 
   const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
