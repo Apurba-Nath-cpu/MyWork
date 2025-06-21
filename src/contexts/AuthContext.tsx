@@ -74,9 +74,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       async (_event, session) => {
         // The 'INITIAL_SESSION' event is handled by checkInitialSession, 
         // so we can ignore it here to prevent redundant fetches and race conditions.
-        if (_event === 'INITIAL_SESSION') {
-          return;
-        }
+        // return;
+        // if (_event === 'INITIAL_SESSION') {
+        // }
 
         const authUser = session?.user ?? null;
         setSupabaseUser(authUser);

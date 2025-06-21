@@ -241,6 +241,7 @@ export const getSession = async (
 export const getUserProfile = async (userId: string): Promise<User | null> => {
   if (!supabase) return null;
   console.log("Supabase: Fetching user profile from public.users for ID:", userId);
+  if(supabase) console.log('supabase:', supabase);
   const { data, error } = await supabase
     .from('users')
     .select('id, name, email, role, avatar_url, organization_id') 
