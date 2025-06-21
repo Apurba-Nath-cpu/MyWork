@@ -142,7 +142,7 @@ const HomePage: React.FC = () => {
     <div className={`flex flex-col h-screen font-sans ${theme} bg-background text-foreground`}>
       <Navbar />
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex-grow p-4 overflow-x-auto"> 
+        <div className="flex-grow p-4 overflow-x-auto hide-scrollbar"> 
           <Droppable 
             droppableId="all-projects" 
             direction="horizontal" 
