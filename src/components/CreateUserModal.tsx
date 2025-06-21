@@ -1,68 +1,74 @@
 
 "use client";
-import React, { useState }  from 'react';
+import React, { useState, useEffect } from 'react';
+import { useFormState, useFormStatus } from 'react-dom';
 import Modal from './Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { UserRole } from '../types';
-import type { UserCreationData } from '../types';
 import { useToast } from "@/hooks/use-toast";
+import { inviteUserAction, type InviteUserActionState } from '@/actions/userActions';
+
+// Submit button that shows a pending state
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800 disabled:bg-opacity-50"
+    >
+      {pending ? 'Sending...' : 'Send Invitation'}
+    </button>
+  );
+}
 
 const CreateUserModal: React.FC = () => {
-  const { createUser } = useAuth();
+  const { currentUser } = useAuth();
   const { showCreateUserModal, setShowCreateUserModal } = useData();
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Omit<UserCreationData, 'password'>>({
-    name: '',
-    email: '',
-    role: UserRole.MEMBER,
-  });
-  const [error, setError] = useState<string | null>(null);
+  const initialState: InviteUserActionState = { message: '', isError: false };
+  // Note: The form action is now managed by useFormState
+  const [state, formAction] = useFormState(inviteUserAction, initialState);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState(UserRole.MEMBER);
 
   const resetForm = () => {
-      setFormData({ name: '', email: '', role: UserRole.MEMBER });
-      setError(null);
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!formData.name.trim() || !formData.email.trim()) {
-      const msg = 'Name and Email are required.';
-      setError(msg);
-      toast({ title: "Validation Error", description: msg, variant: "destructive" });
-      return;
-    }
-    if (!formData.email.includes('@')) { 
-        const msg = 'Please enter a valid email address.';
-        setError(msg);
-        toast({ title: "Validation Error", description: msg, variant: "destructive" });
-        return;
-    }
-    
-    const result = await createUser(formData.name, formData.email, formData.role);
-    if (result.success && result.user) {
-      resetForm();
-      setShowCreateUserModal(false);
-    } else {
-      setError(result.error || 'Failed to invite user.');
-    }
+      setName('');
+      setEmail('');
+      setRole(UserRole.MEMBER);
   };
+  
+  // Need to memoize handleClose to use in useEffect dependency array without causing infinite loops.
+  const handleClose = React.useCallback(() => {
+    resetForm();
+    setShowCreateUserModal(false);
+  }, [setShowCreateUserModal]);
+
+  useEffect(() => {
+    // This effect runs when the server action returns a new state.
+    if (state.message) {
+      toast({
+        title: state.isError ? "Invitation Error" : "Invitation Sent",
+        description: state.message,
+        variant: state.isError ? "destructive" : "default",
+      });
+
+      if (!state.isError) {
+        handleClose();
+      }
+    }
+  }, [state, toast, handleClose]);
 
   if (!showCreateUserModal) return null;
 
   return (
-    <Modal isOpen={showCreateUserModal} onClose={() => { setShowCreateUserModal(false); resetForm(); }} title="Invite New User">
-      <form onSubmit={handleSubmit} aria-labelledby="modal-title-create-user" className="space-y-4">
-        {error && <p className="text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 dark:bg-opacity-30 p-2 rounded text-center">{error}</p>}
+    <Modal isOpen={showCreateUserModal} onClose={handleClose} title="Invite New User">
+      {/* The form now calls the server action directly */}
+      <form action={formAction} aria-labelledby="modal-title-create-user" className="space-y-4">
         
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           An invitation will be sent to the user's email address, allowing them to set their password and log in.
@@ -76,8 +82,8 @@ const CreateUserModal: React.FC = () => {
             type="text"
             id="userName"
             name="name"
-            value={formData.name}
-            onChange={handleChange}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
             required
           />
@@ -91,8 +97,8 @@ const CreateUserModal: React.FC = () => {
             type="email"
             id="userEmail"
             name="email"
-            value={formData.email}
-            onChange={handleChange}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
             required
           />
@@ -105,8 +111,8 @@ const CreateUserModal: React.FC = () => {
           <select
             id="userRole"
             name="role"
-            value={formData.role}
-            onChange={handleChange}
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
             className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
           >
             {Object.values(UserRole).map(roleValue => (
@@ -116,24 +122,19 @@ const CreateUserModal: React.FC = () => {
             ))}
           </select>
         </div>
+        
+        {/* Pass organizationId to the server action */}
+        <input type="hidden" name="organizationId" value={currentUser?.organization_id || ''} />
 
         <div className="mt-6 flex justify-end space-x-3">
           <button
             type="button"
-            onClick={() => {
-                setShowCreateUserModal(false);
-                resetForm();
-            }}
+            onClick={handleClose}
             className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100 dark:bg-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-500 border border-neutral-300 dark:border-neutral-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800"
-          >
-            Send Invitation
-          </button>
+          <SubmitButton />
         </div>
       </form>
     </Modal>
