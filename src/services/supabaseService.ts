@@ -246,6 +246,8 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
     .select('id, name, email, role, avatar_url, organization_id') 
     .eq('id', userId)
     .single();
+
+  console.log('📦 getUserProfile:', data, error);
   
   if (error && error.code !== 'PGRST116') { 
     console.error("Error fetching user profile:", error);
