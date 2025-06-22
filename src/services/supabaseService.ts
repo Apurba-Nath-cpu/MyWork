@@ -153,6 +153,43 @@ export const signUpUserAndCreateOrg = async (
   return { success: true, error: null, user: authUser };
 };
 
+export const signUpUser = async (
+  email: string, 
+  password: string, 
+): Promise<{ success: boolean; error: SignUpError | null; user: SupabaseAuthUser | null }> => {
+  let authData: { user: SupabaseAuthUser | null; session: Session | null; } | null = null;
+  let authError: SupabaseAuthError | null = null;
+  if(!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError'), user: null };
+  
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+    });
+    authData = data;
+    authError = error;
+  } catch (e) {
+    if (e instanceof Error) {
+        authError = { name: 'UnexpectedSignUpError', message: e.message } as SupabaseAuthError;
+    } else {
+        authError = { name: 'UnexpectedSignUpError', message: 'An unknown error occurred during sign up.' } as SupabaseAuthError;
+    }
+  }  
+
+  if (authError || !authData?.user) {
+    const signUpError: SignUpError = {
+        ...(authError || { name: 'UnknownAuthError', message: 'Authentication sign up failed.' }), 
+        message: authError?.message || "Authentication sign up failed.",
+        isEmailConflict: authError?.message.toLowerCase().includes("user already registered") || authError?.message.toLowerCase().includes("email link is invalid or has expired"), 
+    } as SignUpError;
+    return { success: false, error: signUpError, user: null };
+  }
+  const authUser = authData.user;
+
+  //
+  return { success: true, error: null, user: authUser };
+}
+
 export const signInUser = async (email: string, password: string): 
   Promise<{ success: boolean; error: SupabaseAuthError | null; user: SupabaseAuthUser | null }> => {
   if (!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError'), user: null };
@@ -277,6 +314,105 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
     throw error; // Let the caller handle the error
   }
 };
+
+
+export const createUserAccount = async (id: string, name: string, email: string, role: UserRole, organizationId: string): 
+  Promise<{user: User | null; error: CreateUserAccountError | null}> => {
+  if (!supabase) return { user: null, error: createNotConfiguredError('ConfigurationError') as CreateUserAccountError };
+  console.log("Supabase Admin: Creating user profile in public.users", { name, email, role, organizationId });
+  
+  if (!email.includes('@')) {
+    const errorObj: CreateUserAccountError = { message: "Invalid email format.", code: "22000", details: "", hint: "" }; 
+    return { user: null, error: errorObj };
+  }
+
+  // Use a transaction-like approach with upsert to handle race conditions
+  const avatarUrl = `https://picsum.photos/seed/${encodeURIComponent(email)}/40/40`; 
+
+  const { data, error: insertError } = await supabase
+    .from('users')
+    .upsert([{ 
+      id,
+      name, 
+      email, 
+      role, 
+      avatar_url: avatarUrl, 
+      organization_id: organizationId 
+    }], { 
+      onConflict: 'email',
+      ignoreDuplicates: false 
+    })
+    .select('id, name, email, role, avatar_url, organization_id')
+    .single();
+
+  if (insertError) {
+    const finalError: CreateUserAccountError = {
+      ...(insertError as SupabasePostgrestError),
+      isEmailConflict: insertError.code === '23505' && (
+        insertError.message.includes('users_email_key') || 
+        insertError.message.includes('users_email_unique')
+      ), 
+      isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_unique'),
+    };
+    console.error("Supabase Admin: Error creating user profile in public.users:", finalError);
+    return { user: null, error: finalError };
+  }
+
+  console.log("Supabase Admin: User profile created in public.users:", data);
+  if (data) {
+    return { 
+      user: {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        role: data.role as UserRole,
+        avatarUrl: data.avatar_url,
+        organization_id: data.organization_id,
+      }, 
+      error: null 
+    };
+  }
+  return { user: null, error: { message: "Unknown error creating user profile", code: "00000", details:"", hint:"" } as CreateUserAccountError };
+};
+
+export const deleteUserByAdmin = async (
+  userIdToDelete: string,
+  adminUserId: string, 
+  organizationId: string
+): Promise<{ success: boolean; error?: { message: string } }> => {
+  if (!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError') };
+
+  if (userIdToDelete === adminUserId) {
+    return { success: false, error: { message: "Admin cannot delete themselves through this function." } };
+  }
+
+  // Delete from public.users first
+  const { error: deleteProfileError } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', userIdToDelete)
+    .eq('organization_id', organizationId); // Ensure admin is deleting from their own org
+
+  if (deleteProfileError) {
+    console.error("Error deleting user profile from public.users:", deleteProfileError);
+    return { success: false, error: { message: `Failed to delete user profile: ${deleteProfileError.message}` } };
+  }
+
+  // Attempt to delete from auth.users
+  try {
+    const { error: deleteAuthUserError } = await supabase.auth.admin.deleteUser(userIdToDelete);
+    if (deleteAuthUserError) {
+      console.warn(`User profile ${userIdToDelete} deleted, but failed to delete auth user: ${deleteAuthUserError.message}. This may require manual cleanup or a backend admin call.`);
+    } else {
+      console.log(`User ${userIdToDelete} (profile and auth) deleted by admin ${adminUserId}.`);
+    }
+  } catch (e: any) {
+     console.warn(`User profile ${userIdToDelete} deleted. Error during auth user deletion attempt: ${e.message}. This usually means the client doesn't have admin rights for auth operations.`);
+  }
+
+  return { success: true };
+};
+
 
 export const getUsers = async (organizationId: string): Promise<User[]> => {
   if (!supabase) return [];

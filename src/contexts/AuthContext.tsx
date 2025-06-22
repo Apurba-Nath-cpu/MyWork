@@ -197,6 +197,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [toast]);
 
+  const createUser = useCallback(async (name: string, email: string, role: UserRole): Promise<{success: boolean; user: User | null; error?: string; isEmailConflict?: boolean; isUsernameConflictInOrg?: boolean}> => {
+    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
+      const errMsg = "Only Admins can create user profiles within their organization.";
+      toast({ title: "Permission Denied", description: errMsg, variant: "destructive" });
+      return { success: false, user: null, error: errMsg };
+    }
+    const {success, error, user} = await supabaseService.signUpUser(email, '123456');
+    if (!success || !user) {
+      toast({ title: "Error Creating User", description: error?.message || "Failed to create user profile.", variant: "destructive" });
+      return { success: false, user: null, error: error?.message };
+    }
+    const result = await supabaseService.createUserAccount(user.id, name, email, role, currentUser.organization_id);
+    
+    if (result.user) {
+      await fetchPublicUsers(currentUser.organization_id);
+      toast({ title: "User Created", description: `User profile for ${result.user.name} created successfully.` });
+      // logout();
+      return { success: true, user: result.user };
+    } else {
+      let errorMessage = result.error?.message || `Failed to create user profile for ${name}.`;
+      if (result.error?.isEmailConflict) {
+        errorMessage = "A user with this email already exists.";
+      } else if (result.error?.isUsernameConflictInOrg) {
+        errorMessage = "A user with this username already exists in your organization.";
+      }
+      toast({ title: "Error Creating User", description: errorMessage, variant: "destructive" });
+      return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict, isUsernameConflictInOrg: result.error?.isUsernameConflictInOrg };
+    }
+
+  }, [currentUser, toast, fetchPublicUsers]);
+
+  const deleteUserByAdmin = useCallback(async (userIdToDelete: string): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
+      const msg = "Only Admins can delete users.";
+      toast({ title: "Permission Denied", description: msg, variant: "destructive" });
+      return { success: false, error: msg };
+    }
+    if (userIdToDelete === currentUser.id) {
+      const msg = "You cannot delete your own account using this function.";
+      toast({ title: "Action Not Allowed", description: msg, variant: "destructive" });
+      return { success: false, error: msg };
+    }
+
+    const result = await supabaseService.deleteUserByAdmin(userIdToDelete, currentUser.id, currentUser.organization_id);
+
+    if (result.success) {
+      await fetchPublicUsers(currentUser.organization_id);
+      toast({ title: "User Deleted", description: `User profile has been deleted. Note: The user's authentication entry might still exist and require manual cleanup by a Supabase project admin if direct auth deletion failed.` });
+      return { success: true };
+    } else {
+      toast({ title: "Error Deleting User", description: result.error?.message || "Could not delete user profile.", variant: "destructive" });
+      return { success: false, error: result.error?.message };
+    }
+  }, [currentUser, toast, fetchPublicUsers]);
+
   return (
     <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, fetchPublicUsers }}>
       {children}
