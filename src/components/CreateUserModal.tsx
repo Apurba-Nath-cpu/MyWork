@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { UserRole, ProjectRole } from '../types';
 import { useToast } from "@/hooks/use-toast";
-import { inviteUserAction, type InviteUserActionState } from '@/actions/userActions';
+import { createUserAction, type CreateUserActionState } from '@/actions/userActions';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
@@ -20,7 +20,7 @@ function SubmitButton() {
       disabled={pending}
       className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-neutral-800 disabled:bg-opacity-50"
     >
-      {pending ? 'Sending...' : 'Send Invitation'}
+      {pending ? 'Creating...' : 'Create User'}
     </button>
   );
 }
@@ -30,11 +30,12 @@ const CreateUserModal: React.FC = () => {
   const { showCreateUserModal, setShowCreateUserModal, boardData } = useData();
   const { toast } = useToast();
 
-  const initialState: InviteUserActionState = { message: '', isError: false };
-  const [state, formAction] = useFormState(inviteUserAction, initialState);
+  const initialState: CreateUserActionState = { message: '', isError: false };
+  const [state, formAction] = useFormState(createUserAction, initialState);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isOrgMaintainer, setIsOrgMaintainer] = useState(false);
   const [projectAssignments, setProjectAssignments] = useState<Record<string, ProjectRole>>({});
 
@@ -53,6 +54,7 @@ const CreateUserModal: React.FC = () => {
   const resetForm = () => {
       setName('');
       setEmail('');
+      setPassword('');
       setIsOrgMaintainer(false);
       setProjectAssignments({});
   };
@@ -65,7 +67,7 @@ const CreateUserModal: React.FC = () => {
   useEffect(() => {
     if (state.message) {
       toast({
-        title: state.isError ? "Invitation Error" : "Invitation Sent",
+        title: state.isError ? "Creation Error" : "User Created",
         description: state.message,
         variant: state.isError ? "destructive" : "default",
       });
@@ -79,11 +81,11 @@ const CreateUserModal: React.FC = () => {
   if (!showCreateUserModal) return null;
 
   return (
-    <Modal isOpen={showCreateUserModal} onClose={handleClose} title="Invite New User">
+    <Modal isOpen={showCreateUserModal} onClose={handleClose} title="Create New User">
       <form action={formAction} aria-labelledby="modal-title-create-user" className="space-y-4">
         
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          An invitation will be sent to the user's email address, allowing them to set their password and log in.
+          Create a new user account in your organization. An email will be sent for account confirmation.
         </p>
 
         <div>
@@ -113,6 +115,22 @@ const CreateUserModal: React.FC = () => {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
             required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="userPassword" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            id="userPassword"
+            name="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
+            required
+            minLength={6}
           />
         </div>
         
