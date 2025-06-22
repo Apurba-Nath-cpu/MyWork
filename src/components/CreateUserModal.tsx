@@ -8,6 +8,8 @@ import { useData } from '../contexts/DataContext';
 import { UserRole, ProjectRole } from '../types';
 import { useToast } from "@/hooks/use-toast";
 import { inviteUserAction, type InviteUserActionState } from '@/actions/userActions';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 // Submit button that shows a pending state
 function SubmitButton() {
@@ -33,7 +35,7 @@ const CreateUserModal: React.FC = () => {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState(UserRole.MEMBER);
+  const [isOrgMaintainer, setIsOrgMaintainer] = useState(false);
   const [projectAssignments, setProjectAssignments] = useState<Record<string, ProjectRole>>({});
 
   const handleProjectAssignmentChange = (projectId: string, projectRole: ProjectRole | 'NONE') => {
@@ -51,7 +53,7 @@ const CreateUserModal: React.FC = () => {
   const resetForm = () => {
       setName('');
       setEmail('');
-      setRole(UserRole.MEMBER);
+      setIsOrgMaintainer(false);
       setProjectAssignments({});
   };
   
@@ -113,57 +115,65 @@ const CreateUserModal: React.FC = () => {
             required
           />
         </div>
-
-        <div>
-          <label htmlFor="userRole" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Organization Role
-          </label>
-          <select
-            id="userRole"
-            name="role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as UserRole)}
-            className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 focus:ring-primary-500 focus:border-primary-500"
-          >
-            {Object.values(UserRole).map(roleValue => (
-              <option key={roleValue} value={roleValue}>
-                {roleValue.replace('_', ' ').charAt(0).toUpperCase() + roleValue.replace('_', ' ').slice(1).toLowerCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Project Assignments (Optional)
-          </label>
-          <div className="max-h-48 overflow-y-auto border border-neutral-300 dark:border-neutral-600 rounded-md p-2 space-y-2 bg-white dark:bg-neutral-700">
-            {boardData && boardData.projectOrder.length > 0 ? (
-              boardData.projectOrder.map(projectId => {
-                const project = boardData.projects[projectId];
-                return (
-                  <div key={projectId} className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-800 dark:text-neutral-200">{project.title}</span>
-                    <select
-                      onChange={(e) => handleProjectAssignmentChange(projectId, e.target.value as ProjectRole | 'NONE')}
-                      value={projectAssignments[projectId] || 'NONE'}
-                      className="text-sm p-1 border border-neutral-300 dark:border-neutral-500 rounded-md bg-white dark:bg-neutral-600 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="NONE">None</option>
-                      <option value={ProjectRole.MEMBER}>Member</option>
-                      <option value={ProjectRole.MAINTAINER}>Maintainer</option>
-                    </select>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">No projects available to assign.</p>
-            )}
-          </div>
-        </div>
         
+        <div className="space-y-2 pt-2">
+            <div className="flex items-center space-x-2">
+                <Checkbox
+                    id="isOrgMaintainer"
+                    checked={isOrgMaintainer}
+                    onCheckedChange={(checked) => setIsOrgMaintainer(Boolean(checked))}
+                />
+                <Label
+                    htmlFor="isOrgMaintainer"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                    Assign as Organization Maintainer
+                </Label>
+            </div>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 pl-1">
+                Org Maintainers can edit all projects and do not need individual assignments.
+            </p>
+        </div>
+
+
+        {!isOrgMaintainer && (
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Project Assignments (Optional)
+            </label>
+            <div className="max-h-48 overflow-y-auto border border-neutral-300 dark:border-neutral-600 rounded-md p-2 space-y-2 bg-white dark:bg-neutral-700">
+              {boardData && boardData.projectOrder.length > 0 ? (
+                boardData.projectOrder.map(projectId => {
+                  const project = boardData.projects[projectId];
+                  return (
+                    <div key={projectId} className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-800 dark:text-neutral-200">{project.title}</span>
+                      <select
+                        onChange={(e) => handleProjectAssignmentChange(projectId, e.target.value as ProjectRole | 'NONE')}
+                        value={projectAssignments[projectId] || 'NONE'}
+                        className="text-sm p-1 border border-neutral-300 dark:border-neutral-500 rounded-md bg-white dark:bg-neutral-600 focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        <option value="NONE">None</option>
+                        <option value={ProjectRole.MEMBER}>Member</option>
+                        <option value={ProjectRole.MAINTAINER}>Maintainer</option>
+                      </select>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">No projects available to assign.</p>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <input type="hidden" name="role" value={isOrgMaintainer ? UserRole.ORG_MAINTAINER : UserRole.MEMBER} />
         <input type="hidden" name="organizationId" value={currentUser?.organization_id || ''} />
-        <input type="hidden" name="projectAssignments" value={JSON.stringify(projectAssignments)} />
+        <input 
+            type="hidden" 
+            name="projectAssignments" 
+            value={isOrgMaintainer ? '{}' : JSON.stringify(projectAssignments)}
+        />
 
 
         <div className="mt-6 flex justify-end space-x-3">
