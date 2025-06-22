@@ -153,6 +153,43 @@ export const signUpUserAndCreateOrg = async (
   return { success: true, error: null, user: authUser };
 };
 
+export const signUpUser = async (
+  email: string, 
+  password: string, 
+): Promise<{ success: boolean; error: SignUpError | null; user: SupabaseAuthUser | null }> => {
+  let authData: { user: SupabaseAuthUser | null; session: Session | null; } | null = null;
+  let authError: SupabaseAuthError | null = null;
+  if(!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError'), user: null };
+  
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+    });
+    authData = data;
+    authError = error;
+  } catch (e) {
+    if (e instanceof Error) {
+        authError = { name: 'UnexpectedSignUpError', message: e.message } as SupabaseAuthError;
+    } else {
+        authError = { name: 'UnexpectedSignUpError', message: 'An unknown error occurred during sign up.' } as SupabaseAuthError;
+    }
+  }  
+
+  if (authError || !authData?.user) {
+    const signUpError: SignUpError = {
+        ...(authError || { name: 'UnknownAuthError', message: 'Authentication sign up failed.' }), 
+        message: authError?.message || "Authentication sign up failed.",
+        isEmailConflict: authError?.message.toLowerCase().includes("user already registered") || authError?.message.toLowerCase().includes("email link is invalid or has expired"), 
+    } as SignUpError;
+    return { success: false, error: signUpError, user: null };
+  }
+  const authUser = authData.user;
+
+  //
+  return { success: true, error: null, user: authUser };
+}
+
 export const signInUser = async (email: string, password: string): 
   Promise<{ success: boolean; error: SupabaseAuthError | null; user: SupabaseAuthUser | null }> => {
   if (!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError'), user: null };
@@ -279,7 +316,7 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 };
 
 
-export const createUserAccount = async (name: string, email: string, role: UserRole, organizationId: string): 
+export const createUserAccount = async (id: string, name: string, email: string, role: UserRole, organizationId: string): 
   Promise<{user: User | null; error: CreateUserAccountError | null}> => {
   if (!supabase) return { user: null, error: createNotConfiguredError('ConfigurationError') as CreateUserAccountError };
   console.log("Supabase Admin: Creating user profile in public.users", { name, email, role, organizationId });
@@ -289,54 +326,38 @@ export const createUserAccount = async (name: string, email: string, role: UserR
     return { user: null, error: errorObj };
   }
 
-  // Check for username uniqueness within the organization
-  const { data: existingUserByName, error: nameCheckError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('name', name)
-    .eq('organization_id', organizationId)
-    .maybeSingle();
-
-  if (nameCheckError && nameCheckError.code !== 'PGRST116') {
-    console.error("Error checking for existing username in org:", nameCheckError);
-    return { user: null, error: nameCheckError as CreateUserAccountError };
-  }
-  if (existingUserByName) {
-    return { user: null, error: { message: "Username already exists in this organization.", code: "23505", isUsernameConflictInOrg: true } as CreateUserAccountError };
-  }
-
-  // Check for global email uniqueness in public.users
-  const { data: existingUserByEmail, error: emailCheckError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (emailCheckError && emailCheckError.code !== 'PGRST116') {
-     console.error("Error checking for existing email:", emailCheckError);
-    return { user: null, error: emailCheckError as CreateUserAccountError };
-  }
-  if (existingUserByEmail) {
-    return { user: null, error: { message: "Email address is already in use.", code: "23505", isEmailConflict: true } as CreateUserAccountError };
-  }
-
+  // Use a transaction-like approach with upsert to handle race conditions
   const avatarUrl = `https://picsum.photos/seed/${encodeURIComponent(email)}/40/40`; 
 
   const { data, error: insertError } = await supabase
     .from('users')
-    .insert([{ name, email, role, avatar_url: avatarUrl, organization_id: organizationId }]) 
+    .upsert([{ 
+      id,
+      name, 
+      email, 
+      role, 
+      avatar_url: avatarUrl, 
+      organization_id: organizationId 
+    }], { 
+      onConflict: 'email',
+      ignoreDuplicates: false 
+    })
     .select('id, name, email, role, avatar_url, organization_id')
     .single();
 
   if (insertError) {
     const finalError: CreateUserAccountError = {
       ...(insertError as SupabasePostgrestError),
-      isEmailConflict: insertError.code === '23505' && insertError.message.includes('users_email_unique'), 
+      isEmailConflict: insertError.code === '23505' && (
+        insertError.message.includes('users_email_key') || 
+        insertError.message.includes('users_email_unique')
+      ), 
       isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_unique'),
     };
     console.error("Supabase Admin: Error creating user profile in public.users:", finalError);
     return { user: null, error: finalError };
   }
+
   console.log("Supabase Admin: User profile created in public.users:", data);
   if (data) {
     return { 

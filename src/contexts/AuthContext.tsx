@@ -202,11 +202,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast({ title: "Permission Denied", description: errMsg, variant: "destructive" });
       return { success: false, user: null, error: errMsg };
     }
-    const result = await supabaseService.createUserAccount(name, email, role, currentUser.organization_id);
+    const {success, error, user} = await supabaseService.signUpUser(email, '123456');
+    if (!success || !user) {
+      toast({ title: "Error Creating User", description: error?.message || "Failed to create user profile.", variant: "destructive" });
+      return { success: false, user: null, error: error?.message };
+    }
+    const result = await supabaseService.createUserAccount(user.id, name, email, role, currentUser.organization_id);
     
     if (result.user) {
       await fetchPublicUsers(currentUser.organization_id);
       toast({ title: "User Created", description: `User profile for ${result.user.name} created successfully.` });
+      // logout();
       return { success: true, user: result.user };
     } else {
       let errorMessage = result.error?.message || `Failed to create user profile for ${name}.`;
@@ -218,6 +224,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast({ title: "Error Creating User", description: errorMessage, variant: "destructive" });
       return { success: false, user: null, error: errorMessage, isEmailConflict: result.error?.isEmailConflict, isUsernameConflictInOrg: result.error?.isUsernameConflictInOrg };
     }
+
   }, [currentUser, toast, fetchPublicUsers]);
 
   const deleteUserByAdmin = useCallback(async (userIdToDelete: string): Promise<{ success: boolean; error?: string }> => {
