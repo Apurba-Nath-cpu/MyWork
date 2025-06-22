@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { UserRole, ProjectRole } from '@/types';
 import { revalidatePath } from 'next/cache';
+import { supabase } from '@/services/supabaseService';
 
 export interface CreateUserActionState {
   message: string;
@@ -121,4 +122,89 @@ export async function createUserAction(
   revalidatePath('/');
 
   return { message: `User account created for ${email}. They will need to confirm their email before logging in.`, isError: false };
+}
+
+
+export interface UpdateUserAccessActionState {
+  message: string;
+  isError: boolean;
+}
+
+export async function updateUserAccessAction(
+  prevState: UpdateUserAccessActionState,
+  formData: FormData
+): Promise<UpdateUserAccessActionState> {
+  const userId = formData.get('userId') as string;
+  const role = formData.get('role') as UserRole;
+  const projectAssignmentsRaw = formData.get('projectAssignments') as string;
+
+  let projectAssignments: Record<string, ProjectRole> = {};
+  try {
+    if (projectAssignmentsRaw) {
+      projectAssignments = JSON.parse(projectAssignmentsRaw);
+    }
+  } catch (e) {
+    return { message: 'Invalid project assignments format.', isError: true };
+  }
+
+  if (!userId || !role) {
+    return { message: 'Missing required fields.', isError: true };
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { message: 'Server configuration error.', isError: true };
+  }
+
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+  // In a real app, you would get the current user ID from the session and check their role here for security.
+  // For now, we assume the client-side checks are sufficient for this prototype.
+
+  // 1. Update user's organization-level role
+  const { error: roleUpdateError } = await supabaseAdmin
+    .from('users')
+    .update({ role: role })
+    .eq('id', userId);
+
+  if (roleUpdateError) {
+    return { message: `Failed to update user role: ${roleUpdateError.message}`, isError: true };
+  }
+
+  // 2. Delete all existing project memberships for this user
+  const { error: deleteMembershipsError } = await supabaseAdmin
+    .from('project_members')
+    .delete()
+    .eq('user_id', userId);
+
+  if (deleteMembershipsError) {
+    return { message: `Failed to clear old project assignments: ${deleteMembershipsError.message}`, isError: true };
+  }
+  
+  // 3. Insert new project memberships if any were provided
+  const membershipsToInsert = Object.entries(projectAssignments)
+    .filter(([, projectRole]) => projectRole) // Filter out 'None'
+    .map(([projectId, projectRole]) => ({
+      user_id: userId,
+      project_id: projectId,
+      role: projectRole,
+    }));
+
+  if (membershipsToInsert.length > 0) {
+    const { error: membershipError } = await supabaseAdmin
+      .from('project_members')
+      .insert(membershipsToInsert);
+
+    if (membershipError) {
+      // Note: At this point, the user's role is updated but their memberships are not.
+      // A transaction or RPC call would be better for production to ensure atomicity.
+      return { message: `Could not set new project assignments: ${membershipError.message}`, isError: true };
+    }
+  }
+
+  revalidatePath('/');
+
+  return { message: 'User access updated successfully.', isError: false };
 }

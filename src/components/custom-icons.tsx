@@ -18,7 +18,8 @@ import {
   CheckCircle2,   // Used for TaskIcon and CheckCircleIcon
   Tag,
   Circle,
-  Clock
+  Clock,
+  UserCog,
 } from 'lucide-react';
 
 // Re-exporting lucide-react icons with the names previously used by custom SVGs
@@ -41,3 +42,4 @@ export const TagIcon = Tag;
 export const CheckCircleIcon = CheckCircle2;
 export const CircleIcon = Circle;
 export const ClockIcon = Clock;
+export const UserCogIcon = UserCog;

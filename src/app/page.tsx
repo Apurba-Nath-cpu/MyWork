@@ -17,6 +17,7 @@ import EditProjectModal from '../components/EditProjectModal';
 import EditTaskModal from '../components/EditTaskModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuthScreen from '../components/AuthScreen';
+import ManageUserAccessModal from '../components/ManageUserAccessModal';
 
 
 const HomePage: React.FC = () => {
@@ -31,6 +32,7 @@ const HomePage: React.FC = () => {
     showAddProjectModal, 
     showAddTaskModalForProject, 
     showCreateUserModal,
+    showManageAccessModal,
     editingProject,
     editingTask,
     confirmationModalState,
@@ -182,6 +184,7 @@ const HomePage: React.FC = () => {
       {showAddProjectModal && <AddProjectModal />}
       {showAddTaskModalForProject && <AddTaskModal projectId={showAddTaskModalForProject} />}
       {showCreateUserModal && <CreateUserModal />}
+      {showManageAccessModal && <ManageUserAccessModal />}
       {editingProject && <EditProjectModal project={editingProject} />}
       {editingTask && <EditTaskModal task={editingTask} />}
       {confirmationModalState.isOpen && (

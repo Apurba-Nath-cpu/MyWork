@@ -5,16 +5,17 @@ import { useTheme, Theme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { UserRole } from '../types';
-import { SunIcon, MoonIcon, UserCircleIcon, LogoutIcon, PlusCircleIcon, UserPlusIcon } from './custom-icons';
+import { SunIcon, MoonIcon, UserCircleIcon, LogoutIcon, PlusCircleIcon, UserPlusIcon, UserCogIcon } from './custom-icons';
 import { APP_TITLE } from '../lib/constants';
 
 const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { currentUser, logout } = useAuth();
-  const { setShowAddProjectModal, setShowCreateUserModal } = useData();
+  const { setShowAddProjectModal, setShowCreateUserModal, setShowManageAccessModal } = useData();
 
   const canCreateProject = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.ORG_MAINTAINER;
-  const canInviteUser = currentUser?.role === UserRole.ADMIN;
+  const canCreateUser = currentUser?.role === UserRole.ADMIN;
+  const canManageUsers = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.ORG_MAINTAINER;
   
   return (
     <nav className="bg-neutral-200 dark:bg-neutral-800 p-4 shadow-md flex justify-between items-center flex-wrap gap-2">
@@ -30,14 +31,24 @@ const Navbar: React.FC = () => {
               <PlusCircleIcon className="w-6 h-6" />
             </button>
         )}
-        {canInviteUser && (
+        {canCreateUser && (
             <button
               onClick={() => setShowCreateUserModal(true)}
               className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-              title="Invite New User"
-              aria-label="Invite New User"
+              title="Create New User"
+              aria-label="Create New User"
             >
               <UserPlusIcon className="w-6 h-6" />
+            </button>
+        )}
+        {canManageUsers && (
+             <button
+              onClick={() => setShowManageAccessModal(true)}
+              className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+              title="Manage User Access"
+              aria-label="Manage User Access"
+            >
+              <UserCogIcon className="w-6 h-6" />
             </button>
         )}
         <button
@@ -55,7 +66,7 @@ const Navbar: React.FC = () => {
             ) : (
                 <UserCircleIcon className="w-8 h-8 text-neutral-600 dark:text-neutral-300" />
             )}
-            <span className="text-sm hidden sm:inline">{currentUser.name} ({currentUser.role.replace('_', ' ')})</span>
+            <span className="text-sm hidden sm:inline">{currentUser.name} ({currentUser.role.replace('_', ' ') == 'MAINTAINER' ? 'MEMBER' : currentUser.role.replace('_', ' ')})</span>
             <button
               onClick={logout}
               className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"

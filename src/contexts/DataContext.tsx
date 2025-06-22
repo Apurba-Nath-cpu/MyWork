@@ -33,6 +33,8 @@ interface DataContextType {
   setShowAddTaskModalForProject: (projectId: string | null) => void;
   showCreateUserModal: boolean;
   setShowCreateUserModal: (show: boolean) => void;
+  showManageAccessModal: boolean;
+  setShowManageAccessModal: (show: boolean) => void;
 
   editingProject: ProjectColumn | null;
   setEditingProject: (project: ProjectColumn | null) => void;
@@ -59,6 +61,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showAddProjectModal, setShowAddProjectModalState] = useState(false);
   const [showAddTaskModalForProject, setShowAddTaskModalForProjectState] = useState<string | null>(null);
   const [showCreateUserModal, setShowCreateUserModalState] = useState(false);
+  const [showManageAccessModal, setShowManageAccessModalState] = useState(false);
   const [editingProject, setEditingProjectState] = useState<ProjectColumn | null>(null);
   const [editingTask, setEditingTaskState] = useState<Task | null>(null);
   
@@ -366,6 +369,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setShowAddTaskModalForProjectState(projectId);
   }, []);
   const setShowCreateUserModal = useCallback((show: boolean) => setShowCreateUserModalState(show), []);
+  const setShowManageAccessModal = useCallback((show: boolean) => setShowManageAccessModalState(show), []);
   const setEditingProject = useCallback((project: ProjectColumn | null) => setEditingProjectState(project), []);
   const setEditingTask = useCallback((task: Task | null) => setEditingTaskState(task), []);
 
@@ -374,7 +378,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       boardData, usersForSuggestions, fetchBoardData, addProject, updateProject, addTask,
       moveProject, moveTaskWithinProject, moveTaskBetweenProjects, updateTask,
       showAddProjectModal, setShowAddProjectModal, showAddTaskModalForProject, setShowAddTaskModalForProject,
-      showCreateUserModal, setShowCreateUserModal, editingProject, setEditingProject, editingTask, setEditingTask,
+      showCreateUserModal, setShowCreateUserModal, showManageAccessModal, setShowManageAccessModal,
+      editingProject, setEditingProject, editingTask, setEditingTask,
       confirmationModalState, showConfirmationModal, hideConfirmationModal, handleConfirmDeletion,
       requestProjectDeletion, requestTaskDeletion
     }}>
