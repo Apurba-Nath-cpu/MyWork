@@ -37,8 +37,8 @@ export async function inviteUserAction(
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('InviteUserAction: Supabase environment variables not set on the server.');
-    return { message: 'Server configuration error. Cannot invite user.', isError: true };
+    console.error('InviteUserAction: SUPABASE_SERVICE_ROLE_KEY environment variable not set on the server.');
+    return { message: 'Server configuration error: The SUPABASE_SERVICE_ROLE_KEY is missing. Please add it to your .env file to enable user invitations.', isError: true };
   }
 
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -92,19 +92,19 @@ export async function inviteUserAction(
     }));
   
   if (membershipsToInsert.length > 0) {
-      const { error: membershipError } = await supabaseAdmin
-        .from('project_members')
-        .insert(membershipsToInsert);
+    const { error: membershipError } = await supabaseAdmin
+      .from('project_members')
+      .insert(membershipsToInsert);
 
-      if (membershipError) {
-        // Rollback user creation if memberships fail to insert
-        await supabaseAdmin.auth.admin.deleteUser(invitedUser.id);
-        // The user profile will be deleted automatically due to the foreign key constraint on users.id
-        return {
-          message: `Database error: Could not assign user to projects. ${membershipError.message}`,
-          isError: true,
-        };
-      }
+    if (membershipError) {
+      // Rollback user creation if memberships fail to insert
+      await supabaseAdmin.auth.admin.deleteUser(invitedUser.id);
+      // The user profile will be deleted automatically due to the foreign key constraint on users.id
+      return {
+        message: `Database error: Could not assign user to projects. ${membershipError.message}`,
+        isError: true,
+      };
+    }
   }
 
 
