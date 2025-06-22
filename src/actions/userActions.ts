@@ -43,7 +43,6 @@ export async function createUserAction(
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('CreateUserAction: SUPABASE_SERVICE_ROLE_KEY environment variable not set on the server.');
     return { message: 'Server configuration error: The SUPABASE_SERVICE_ROLE_KEY is missing. Please add it to your .env file to enable user creation.', isError: true };
   }
 

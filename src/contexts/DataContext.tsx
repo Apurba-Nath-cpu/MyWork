@@ -86,7 +86,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await supabaseService.getBoardData(currentUser.organization_id);
       setBoardData(data);
     } catch (error) {
-      console.error("Failed to fetch board data from Supabase:", error);
       toast({ title: "Error", description: "Failed to load board data for your organization.", variant: "destructive" });
       setBoardData({ tasks: {}, projects: {}, projectOrder: [] }); 
     }

@@ -12,7 +12,7 @@ export const supabase: SupabaseClient | null = (SUPABASE_URL && SUPABASE_ANON_KE
   : null;
 
 if (!supabase) {
-  console.error('Supabase URL or Anon Key is not configured. Please check your .env file. The application will not connect to Supabase, but will continue to run.');
+  // console.error('Supabase URL or Anon Key is not configured. Please check your .env file. The application will not connect to Supabase, but will continue to run.');
 }
 
 const createNotConfiguredError = (name: string) => ({
@@ -32,7 +32,6 @@ export const signUpUserAndCreateOrg = async (
   if (!supabase) {
     return { success: false, error: createNotConfiguredError('ConfigurationError') as SignUpError, user: null };
   }
-  console.log("Supabase: Signing up user and creating organization", { email, name, organizationName });
 
   // Step 0: Check if organization name already exists
   const { data: existingOrg, error: existingOrgQueryError } = await supabase
@@ -42,7 +41,6 @@ export const signUpUserAndCreateOrg = async (
     .maybeSingle();
 
   if (existingOrgQueryError && existingOrgQueryError.code !== 'PGRST116') { // PGRST116 is 'Row not found'
-    console.error("Error checking for existing organization name:", existingOrgQueryError);
     return { 
         success: false, 
         error: { name: "OrgQueryError", message: existingOrgQueryError.message } as SignUpError, 
@@ -87,7 +85,6 @@ export const signUpUserAndCreateOrg = async (
   const authUser = authData.user;
 
   // Step 2: Create Organization
-  console.log(`Supabase: Creating organization "${organizationName}" for admin ID: ${authUser.id}`);
   const { data: orgData, error: orgError } = await supabase
     .from('organizations')
     .insert({ name: organizationName, admin_id: authUser.id })
@@ -95,7 +92,6 @@ export const signUpUserAndCreateOrg = async (
     .single();
 
   if (orgError || !orgData) {
-    console.error("Error creating organization:", orgError);
     // If org creation fails (e.g. race condition on name if DB constraint is set), report it
      const finalError: SignUpError = { 
         name: "OrganizationCreationError", 
@@ -117,16 +113,13 @@ export const signUpUserAndCreateOrg = async (
       .from('avatars') 
       .upload(filePath, avatarFile, { cacheControl: '3600', upsert: true });
 
-    if (uploadError) {
-      console.error('Error uploading avatar:', uploadError);
-    } else {
+    if (!uploadError) {
       const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
       avatarPublicUrl = publicUrlData?.publicUrl;
     }
   }
 
   // Step 4: Create corresponding profile in public.users table, linking to organization
-  console.log(`Supabase: Creating profile in public.users for user ID: ${authUser.id}, org ID: ${organizationId}`);
   const { error: profileError } = await supabase
     .from('users')
     .insert([{ 
@@ -139,7 +132,6 @@ export const signUpUserAndCreateOrg = async (
     }]);
 
   if (profileError) {
-    console.error("Error creating user profile in public.users:", profileError);
     const signUpError: SignUpError = {
         message: profileError.message || "Failed to create user profile.",
         name: "ProfileCreationError",
@@ -149,7 +141,6 @@ export const signUpUserAndCreateOrg = async (
     return { success: false, error: signUpError, user: authUser };
   }
   
-  console.log('Supabase: User signed up, organization created, and profile created successfully.');
   return { success: true, error: null, user: authUser };
 };
 
@@ -193,7 +184,6 @@ export const signUpUser = async (
 export const signInUser = async (email: string, password: string): 
   Promise<{ success: boolean; error: SupabaseAuthError | null; user: SupabaseAuthUser | null }> => {
   if (!supabase) return { success: false, error: createNotConfiguredError('ConfigurationError'), user: null };
-  console.log("Supabase: Signing in user", { email });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
     return { success: false, error, user: null };
@@ -203,7 +193,6 @@ export const signInUser = async (email: string, password: string):
 
 export const signOutUser = async (): Promise<{ error: SupabaseAuthError | null }> => {
   if (!supabase) return { error: null };
-  console.log("Supabase: Signing out user");
   return await supabase.auth.signOut();
 };
 
@@ -215,16 +204,13 @@ export const onAuthStateChange = (callback: (event: string, session: Session | n
 export const waitForInitialSession = (): Promise<Session | null> => {
   return new Promise((resolve) => {
     if (!supabase) {
-      console.warn('🛑 Supabase is not initialized.');
       resolve(null);
       return;
     }
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('📦 Auth state change event:', event);
         // if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-          console.log('🎯 Received INITIAL_SESSION');
           resolve(session ?? null);
           subscription.subscription.unsubscribe();
         // }
@@ -240,12 +226,10 @@ export const getSession = async (
   timeoutMs = 300
 ): Promise<{ data: { session: Session | null }, error: any }> => {
   if (typeof window === 'undefined') {
-    console.log('⛔ Not in browser');
     return { data: { session: null }, error: null };
   }
 
   if (!supabase) {
-    console.log('🔴 Supabase not initialized');
     return { data: { session: null }, error: null };
   }
 
@@ -257,15 +241,12 @@ export const getSession = async (
       ),
     ]);
 
-    console.log('📦 Final session:', session);
 
     if (session || retriesLeft <= 0) {
       return { data: { session }, error: null };
     }
 
-    console.log(`🔁 Retrying... attempts left: ${retriesLeft - 1}`);
   } catch (err: any) {
-    console.warn(`⚠️ Error or timeout: ${err.message}`);
     if (retriesLeft <= 0) {
       return { data: { session: null }, error: err };
     }
@@ -277,7 +258,6 @@ export const getSession = async (
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
   if (!supabase) return null;
-  console.log("Supabase: Fetching user profile from public.users for ID:", userId);
   
   try {
     // Fetch user profile and project memberships in parallel
@@ -296,20 +276,15 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
     const { data: profileData, error: profileError } = profileResult;
     const { data: membershipsData, error: membershipsError } = membershipsResult;
 
-    console.log('📦 getUserProfile result:', { profileData, profileError });
-    console.log('📦 getProjectMemberships result:', { membershipsData, membershipsError });
 
     if (profileError) {
       if (profileError.code === 'PGRST116') {
-        console.warn('User profile not found for ID:', userId);
         return null;
       }
-      console.error("Error fetching user profile:", profileError);
       throw profileError;
     }
 
     if (membershipsError) {
-      console.error("Error fetching project memberships:", membershipsError);
       // We can decide to fail or continue without memberships
       throw membershipsError;
     }
@@ -331,7 +306,6 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
     
     return null;
   } catch (error) {
-    console.error("Exception in getUserProfile:", error);
     throw error;
   }
 };
@@ -340,7 +314,6 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 export const createUserAccount = async (id: string, name: string, email: string, role: UserRole, organizationId: string): 
   Promise<{user: User | null; error: CreateUserAccountError | null}> => {
   if (!supabase) return { user: null, error: createNotConfiguredError('ConfigurationError') as CreateUserAccountError };
-  console.log("Supabase Admin: Creating user profile in public.users", { name, email, role, organizationId });
   
   if (!email.includes('@')) {
     const errorObj: CreateUserAccountError = { message: "Invalid email format.", code: "22000", details: "", hint: "" }; 
@@ -374,11 +347,9 @@ export const createUserAccount = async (id: string, name: string, email: string,
       ), 
       isUsernameConflictInOrg: insertError.code === '23505' && insertError.message.includes('users_name_organization_id_unique'),
     };
-    console.error("Supabase Admin: Error creating user profile in public.users:", finalError);
     return { user: null, error: finalError };
   }
 
-  console.log("Supabase Admin: User profile created in public.users:", data);
   if (data) {
     return { 
       user: {
@@ -398,14 +369,12 @@ export const createUserAccount = async (id: string, name: string, email: string,
 
 export const getUsers = async (organizationId: string): Promise<User[]> => {
   if (!supabase) return [];
-  console.log(`Supabase: Fetching user profiles from public.users for organization ID: ${organizationId}`);
   const { data, error } = await supabase
     .from('users')
     .select('id, name, email, role, avatar_url, organization_id')
     .eq('organization_id', organizationId)
     .order('name');
   if (error) {
-    console.error("Error fetching all user profiles for org:", error);
     return [];
   }
   return (data || []).map(d => ({
@@ -421,7 +390,6 @@ export const getUsers = async (organizationId: string): Promise<User[]> => {
 
 export const getBoardData = async (organizationId: string): Promise<BoardData> => {
   if (!supabase) return { tasks: {}, projects: {}, projectOrder: [] };
-  console.log(`Supabase: Fetching board data for organization ID: ${organizationId}`);
   const { data: projectsData, error: projectsError } = await supabase
     .from('projects')
     .select('*')
@@ -429,7 +397,6 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
     .order('order_index');
 
   if (projectsError) {
-    console.error("Error fetching projects for org:", projectsError);
     throw projectsError;
   }
 
@@ -449,7 +416,6 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
   }
 
   if (tasksError) {
-    console.error("Error fetching tasks for org:", tasksError);
     throw tasksError;
   }
 
@@ -497,7 +463,6 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
 
 export const createProject = async (title: string, orderIndex: number, organizationId: string): Promise<ProjectColumn | null> => {
   if (!supabase) return null;
-  console.log("Supabase: Creating project", { title, orderIndex, organizationId });
   const { data, error } = await supabase
     .from('projects')
     .insert([{ title, order_index: orderIndex, organization_id: organizationId }])
@@ -505,7 +470,6 @@ export const createProject = async (title: string, orderIndex: number, organizat
     .single();
 
   if (error) {
-    console.error("Error creating project:", error);
     return null;
   }
   if (!data) return null;
@@ -519,7 +483,6 @@ export const createProject = async (title: string, orderIndex: number, organizat
 
 export const updateProject = async (updatedProject: Omit<ProjectColumn, 'taskIds'>): Promise<boolean> => {
   if (!supabase) return false;
-  console.log("Supabase: Updating project", updatedProject.id);
   const { error } = await supabase
     .from('projects')
     .update({ 
@@ -528,7 +491,6 @@ export const updateProject = async (updatedProject: Omit<ProjectColumn, 'taskIds
     .eq('id', updatedProject.id);
 
   if (error) {
-    console.error("Error updating project:", error);
     return false;
   }
   return true;
@@ -536,10 +498,8 @@ export const updateProject = async (updatedProject: Omit<ProjectColumn, 'taskIds
 
 export const deleteProject = async (projectId: string): Promise<boolean> => {
   if (!supabase) return false;
-  console.log("Supabase: Deleting project", projectId);
   const { error } = await supabase.from('projects').delete().eq('id', projectId);
   if (error) {
-    console.error("Error deleting project:", error);
     return false;
   }
   return true;
@@ -557,7 +517,6 @@ export const createTask = async (
   tags: string[]
 ): Promise<Task | null> => {
   if (!supabase) return null;
-  console.log("Supabase: Creating task", { projectId, title, orderIndex, status, priority, tags });
   const taskToInsert = { 
       project_id: projectId, 
       title, 
@@ -577,7 +536,6 @@ export const createTask = async (
     .single();
   
   if (error) {
-    console.error("Error creating task:", error);
     return null;
   }
   if(!data) return null;
@@ -596,7 +554,6 @@ export const createTask = async (
 
 export const updateTask = async (updatedTask: Task): Promise<boolean> => {
   if (!supabase) return false;
-  console.log("Supabase: Updating task", updatedTask.id);
   const { error } = await supabase
     .from('tasks')
     .update({
@@ -612,7 +569,6 @@ export const updateTask = async (updatedTask: Task): Promise<boolean> => {
     .eq('id', updatedTask.id);
 
   if (error) {
-    console.error("Error updating task:", error);
     return false;
   }
   return true;
@@ -620,10 +576,8 @@ export const updateTask = async (updatedTask: Task): Promise<boolean> => {
 
 export const deleteTask = async (taskId: string): Promise<boolean> => {
   if (!supabase) return false;
-  console.log("Supabase: Deleting task", taskId);
   const { error } = await supabase.from('tasks').delete().eq('id', taskId);
   if (error) {
-    console.error("Error deleting task:", error);
     return false;
   }
   return true;
@@ -631,7 +585,6 @@ export const deleteTask = async (taskId: string): Promise<boolean> => {
 
 export const updateProjectOrder = async (projectOrder: string[]): Promise<boolean> => {
   if (!supabase) return false;
-  console.log("Supabase: Updating project order");
   const updates = projectOrder.map((projectId, index) => 
     supabase.from('projects').update({ order_index: index }).eq('id', projectId)
   );
@@ -642,14 +595,12 @@ export const updateProjectOrder = async (projectOrder: string[]): Promise<boolea
     }
     return true;
   } catch (error) {
-    console.error("Error updating project order:", error);
     return false;
   }
 };
 
 export const updateTaskOrderInProject = async (projectId: string, taskIds: string[]): Promise<boolean> => {
   if (!supabase) return false;
-  console.log(`Supabase: Updating task order in project ${projectId}`);
   const updates = taskIds.map((taskId, index) =>
     supabase.from('tasks').update({ order_index: index, project_id: projectId }).eq('id', taskId)
   );
@@ -660,7 +611,6 @@ export const updateTaskOrderInProject = async (projectId: string, taskIds: strin
     }
     return true;
   } catch (error) {
-    console.error(`Error updating task order for project ${projectId}:`, error);
     return false;
   }
 };
@@ -671,11 +621,9 @@ export const updateTaskProjectAndOrder = async (
   newTaskIdsInNewProject: string[],
 ): Promise<boolean> => {
   if (!supabase) return false;
-  console.log(`Supabase: Moving task ${taskId} to project ${newProjectId} and updating order.`);
   
   const taskNewOrderIndex = newTaskIdsInNewProject.indexOf(taskId);
   if (taskNewOrderIndex === -1) {
-    console.error(`Task ${taskId} not found in newTaskIdsInNewProject for project ${newProjectId}. Aborting move.`);
     return false;
   }
 
@@ -685,7 +633,6 @@ export const updateTaskProjectAndOrder = async (
     .eq('id', taskId);
 
   if (updateError) {
-    console.error(`Error moving task ${taskId} to project ${newProjectId}:`, updateError);
     return false;
   }
 
@@ -700,7 +647,6 @@ export const updateTaskProjectAndOrder = async (
     }
     return true;
   } catch (error) {
-    console.error(`Error finalizing task order in new project ${newProjectId} after move:`, error);
     return false;
   }
 };

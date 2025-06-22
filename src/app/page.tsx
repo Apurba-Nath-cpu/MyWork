@@ -48,7 +48,6 @@ const HomePage: React.FC = () => {
 
   const onDragEnd = useCallback((result: DropResult) => {
     if (!currentUser) {
-      console.warn("onDragEnd: currentUser is null, drag operation aborted.");
       return;
     }
 
@@ -58,18 +57,15 @@ const HomePage: React.FC = () => {
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
     if (!boardData || !boardData.projects || !boardData.tasks || !Array.isArray(boardData.projectOrder)) {
-        console.error("onDragEnd: boardData is not fully available or invalid. Aborting drag operation.", boardData);
         fetchBoardData(); 
         return;
     }
 
     if (type === DROPPABLE_TYPE_PROJECT) {
       if (!currentUser) { 
-        console.warn("onDragEnd (project): currentUser is null, drag operation aborted.");
         return;
       }
       if (!boardData.projects[draggableId] || !boardData.projectOrder.includes(draggableId)) {
-          console.error(`onDragEnd: Project with ID ${draggableId} not found in boardData or boardData.projectOrder. Aborting moveProject.`, boardData);
           fetchBoardData(); 
           return;
       }
@@ -79,12 +75,10 @@ const HomePage: React.FC = () => {
 
     if (type === 'TASK') {
       if (!boardData.tasks[draggableId]) {
-          console.error(`onDragEnd: Task with ID ${draggableId} not found. Aborting task move.`);
           fetchBoardData(); 
           return;
       }
       if (!boardData.projects[source.droppableId] || (destination.droppableId && !boardData.projects[destination.droppableId])) {
-           console.error(`onDragEnd: Source or destination project not found. Aborting task move.`);
            fetchBoardData(); 
            return;
       }
@@ -93,14 +87,12 @@ const HomePage: React.FC = () => {
       const finishProjectId = destination.droppableId;
       if (startProjectId === finishProjectId) {
         if (!boardData.projects[startProjectId]?.taskIds.includes(draggableId)) {
-            console.error(`onDragEnd: Task ${draggableId} not found in source project ${startProjectId}. Aborting moveTaskWithinProject.`);
             fetchBoardData();
             return;
         }
         moveTaskWithinProject(startProjectId, draggableId, destination.index);
       } else {
         if (!boardData.projects[startProjectId]?.taskIds.includes(draggableId)) {
-            console.error(`onDragEnd: Task ${draggableId} not found in source project ${startProjectId}. Aborting moveTaskBetweenProjects.`);
             fetchBoardData();
             return;
         }
@@ -159,7 +151,6 @@ const HomePage: React.FC = () => {
                 {boardData.projectOrder.map((projectId: string, index: number) => {
                   const project: ProjectColumn | undefined = boardData.projects[projectId];
                   if (!project) {
-                    console.warn(`Project with id "${projectId}" not found in boardData.projects. Skipping render for this project column.`);
                     return null; 
                   }
                   const tasks: Task[] = project.taskIds

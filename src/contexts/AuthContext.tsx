@@ -22,7 +22,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const fetchedUsers = await supabaseService.getUsers(organizationId);
         setUsers(fetchedUsers);
     } else {
-        console.warn("fetchPublicUsers called without a valid organizationId.");
         setUsers([]);
     }
   }, []); 
@@ -38,14 +37,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userProfile = await Promise.race([profilePromise, timeoutPromise]);
       return userProfile;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
       return null;
     }
   }, []);
 
   // Centralized function to handle auth user changes
   const handleAuthUserChange = useCallback(async (authUser: SupabaseAuthUser | null, isInitialLoad = false) => {
-    console.log('handleAuthUserChange called:', { userId: authUser?.id, isInitialLoad });
     
     setSupabaseUser(authUser);
     
@@ -57,17 +54,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         
         const userProfile = await fetchUserProfileWithTimeout(authUser.id);
-        console.log('Fetched userProfile:', userProfile);
         
         if (userProfile) {
           setCurrentUser(userProfile);
         } else {
-          console.warn('Failed to fetch user profile, clearing auth state');
           setCurrentUser(null);
           setSupabaseUser(null);
         }
       } catch (error) {
-        console.error('Error in handleAuthUserChange:', error);
         setCurrentUser(null);
         setSupabaseUser(null);
       }
@@ -87,11 +81,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...');
         
         // Get initial session with a shorter timeout
         const { data: { session } } = await supabaseService.getSession(3, 100, 5000);
-        console.log('Initial session:', session);
         
         if (mounted) {
           if (session?.user) {
@@ -104,7 +96,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Set up auth state listener
         if (mounted) {
           authListenerData = supabaseService.onAuthStateChange(async (event, session) => {
-            console.log('Auth state change:', event, session?.user?.id);
             
             // Skip INITIAL_SESSION as we handled it above
             if (event === 'INITIAL_SESSION') {
@@ -117,7 +108,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
         if (mounted) {
           setLoadingAuth(false);
         }
@@ -184,13 +174,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (error) {
       if (error.message.includes("Auth session missing") || error.message.includes("No active session")) {
-        console.log("Logout: No active session or session already invalid. Forcing client logout state.");
         setCurrentUser(null);
         setUsers([]);
         setSupabaseUser(null);
         setLoadingAuth(false);
       } else {
-        console.error("Logout error:", error);
         toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
         setLoadingAuth(false);
       }
