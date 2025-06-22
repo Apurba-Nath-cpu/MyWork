@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { ProjectColumn, UserRole } from '../types';
+import { ProjectColumn, UserRole, ProjectRole } from '../types';
 
 interface EditProjectModalProps {
   project: ProjectColumn;
@@ -26,7 +26,14 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ project }) => {
       alert('Project title is required.');
       return;
     }
-    if (!currentUser || ![UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) { 
+    if (!currentUser) {
+        alert("You must be logged in to edit a project.");
+        return;
+    }
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === project.id && m.role === ProjectRole.MAINTAINER);
+    const canEdit = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+
+    if (!canEdit) { 
         alert("You do not have permission to edit this project.");
         return;
     }

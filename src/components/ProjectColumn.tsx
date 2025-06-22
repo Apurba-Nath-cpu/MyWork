@@ -26,8 +26,9 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
   const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === project.id && m.role === ProjectRole.MAINTAINER);
 
   const canAddTask = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
-  const canEditProject = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role);
+  const canEditProject = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
   const canDeleteProject = currentUser.role === UserRole.ADMIN;
+  const canDragProject = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role);
 
   const handleDeleteProject = () => {
     if (!canDeleteProject) {
@@ -39,14 +40,18 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
 
   const handleEditProject = () => {
     if (!canEditProject) {
-        alert("Permission denied: Only Admins or Org Maintainers can edit projects.");
+        alert("Permission denied: You do not have permission to edit this project.");
         return;
     }
     setEditingProject(project);
   };
 
   return (
-    <Draggable draggableId={project.id} index={index}>
+    <Draggable 
+      draggableId={project.id} 
+      index={index}
+      isDragDisabled={!canDragProject}
+    >
       {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
         <div
           {...provided.draggableProps}
@@ -54,7 +59,7 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
           className="bg-neutral-200 dark:bg-neutral-800 rounded-lg p-3 shadow-lg w-80 flex-shrink-0 flex flex-col"
         >
           <div className="flex items-center justify-between mb-3 p-1">
-            <div {...provided.dragHandleProps} className="text-lg font-semibold cursor-grab active:cursor-grabbing flex-grow break-all pr-2 text-neutral-800 dark:text-neutral-100">
+            <div {...provided.dragHandleProps} className={`text-lg font-semibold ${canDragProject ? 'cursor-grab active:cursor-grabbing' : ''} flex-grow break-all pr-2 text-neutral-800 dark:text-neutral-100`}>
               {project.title}
             </div>
             <div className="flex items-center flex-shrink-0">

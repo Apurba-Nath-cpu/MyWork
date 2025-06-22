@@ -120,10 +120,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [boardData, currentUser, fetchBoardData, toast]);
 
   const updateProject = useCallback(async (updatedProject: Omit<ProjectColumn, 'taskIds'>) => {
-     if (!currentUser || ![UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || !currentUser.organization_id || updatedProject.organization_id !== currentUser.organization_id) { 
-        toast({ title: "Permission Denied", description: "Only Admins or Org Maintainers can update projects.", variant: "destructive" });
+    if (!currentUser || !currentUser.organization_id || updatedProject.organization_id !== currentUser.organization_id) {
+        toast({ title: "Permission Denied", description: "Project does not belong to your organization.", variant: "destructive" });
         return;
     }
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === updatedProject.id && m.role === ProjectRole.MAINTAINER);
+    const canUpdate = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+
+    if (!canUpdate) {
+        toast({ title: "Permission Denied", description: "You do not have permission to update this project.", variant: "destructive" });
+        return;
+    }
+
     const success = await supabaseService.updateProject(updatedProject);
     if (success) {
       await fetchBoardData(); 

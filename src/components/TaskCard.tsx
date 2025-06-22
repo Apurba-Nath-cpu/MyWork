@@ -73,14 +73,18 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   };
 
   return (
-    <Draggable draggableId={task.id} index={index}>
+    <Draggable 
+      draggableId={task.id} 
+      index={index}
+      isDragDisabled={!canModifyTask}
+    >
       {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            `bg-card text-card-foreground p-3 mb-3 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-grab active:cursor-grabbing border-l-4`,
+            `bg-card text-card-foreground p-3 mb-3 rounded-lg shadow-md hover:shadow-lg transition-shadow ${canModifyTask ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} border-l-4`,
             snapshot.isDragging ? 'ring-2 ring-primary dark:ring-primary-foreground' : '',
             getPriorityClasses(task.priority || TaskPriority.P3) // Border color based on priority
           )}
