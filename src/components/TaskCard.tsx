@@ -3,7 +3,7 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import type { DraggableProvided, DraggableStateSnapshot } from '@hello-pangea/dnd';
-import { Task, UserRole, TaskStatus, TaskPriority } from '../types'; 
+import { Task, UserRole, TaskStatus, TaskPriority, ProjectRole } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
 import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon, ExclamationTriangleIcon, CheckCircleIcon, CircleIcon, ClockIcon } from './custom-icons'; 
 import { useData } from '../contexts/DataContext';
@@ -49,13 +49,12 @@ const getPriorityClasses = (priority: TaskPriority): string => {
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   const { users, currentUser } = useAuth(); 
-  const { requestTaskDeletion, setEditingTask, boardData } = useData();
+  const { requestTaskDeletion, setEditingTask } = useData();
 
   const getAssigneeName = (userId: string) => users.find(u => u.id === userId)?.name || 'Unknown';
   
-  const project = boardData?.projects[task.projectId];
-  const canModifyTask = currentUser?.role === UserRole.ADMIN || 
-                        (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ''));
+  const isProjectMaintainer = currentUser?.projectMemberships.some(m => m.projectId === task.projectId && m.role === ProjectRole.MAINTAINER);
+  const canModifyTask = currentUser && ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer);
 
   const handleDelete = () => {
     if (!canModifyTask) {

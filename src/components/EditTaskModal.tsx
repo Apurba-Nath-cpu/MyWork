@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Task, UserRole, TaskStatus, TaskPriority } from '../types';
+import { Task, UserRole, TaskStatus, TaskPriority, ProjectRole } from '../types';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -51,9 +51,11 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
         alert("Associated project not found.");
         return;
     }
+    if (!currentUser) return;
 
-    const canEditPermission = currentUser?.role === UserRole.ADMIN || 
-                            (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ''));
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === task.projectId && m.role === ProjectRole.MAINTAINER);
+    const canEditPermission = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+
     if (!canEditPermission) {
         alert("You do not have permission to edit this task.");
         return;

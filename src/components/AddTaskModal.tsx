@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { UserRole, TaskStatus, TaskPriority } from '../types';
+import { UserRole, TaskStatus, TaskPriority, ProjectRole } from '../types';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -60,11 +60,13 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ projectId }) => {
         alert("Project not found.");
         return;
     }
+    if (!currentUser) return;
 
-    const canAddTaskPermission = currentUser?.role === UserRole.ADMIN || 
-                               (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ''));
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === projectId && m.role === ProjectRole.MAINTAINER);
+    const canAddTaskPermission = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+
     if (!canAddTaskPermission) {
-        alert("Only Admins or Project Maintainers can add tasks to this project.");
+        alert("You do not have permission to add tasks to this project.");
         return;
     }
     const tagsArray = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);

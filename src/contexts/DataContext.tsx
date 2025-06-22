@@ -1,7 +1,7 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState, TaskStatus, TaskPriority } from '../types';
+import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState, TaskStatus, TaskPriority, ProjectRole } from '../types';
 import * as supabaseService from '../services/supabaseService'; 
 import { useAuth } from './AuthContext';
 import { useToast } from "@/hooks/use-toast";
@@ -10,8 +10,8 @@ interface DataContextType {
   boardData: BoardData | null;
   usersForSuggestions: Array<Pick<User, 'id' | 'name' | 'role'>>;
   fetchBoardData: () => Promise<void>;
-  addProject: (title: string, maintainerIds: string[]) => Promise<void>;
-  updateProject: (updatedProject: ProjectColumn) => Promise<void>;
+  addProject: (title: string) => Promise<void>;
+  updateProject: (updatedProject: Omit<ProjectColumn, 'taskIds'>) => Promise<void>;
   addTask: (
     projectId: string, 
     title: string, 
@@ -102,14 +102,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUsersForSuggestions(authContextUsers.map(u => ({ id: u.id, name: u.name, role: u.role })));
   }, [authContextUsers]);
   
-  const addProject = useCallback(async (title: string, maintainerIds: string[]) => {
-    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id) {
-        toast({ title: "Permission Denied", description: "Only Admins can create projects within their organization.", variant: "destructive" });
+  const addProject = useCallback(async (title: string) => {
+    if (!currentUser || ![UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || !currentUser.organization_id) {
+        toast({ title: "Permission Denied", description: "Only Admins and Org Maintainers can create projects.", variant: "destructive" });
         return;
     }
     if (!boardData) return;
     const orderIndex = boardData.projectOrder.length;
-    const newProject = await supabaseService.createProject(title, maintainerIds, orderIndex, currentUser.organization_id);
+    const newProject = await supabaseService.createProject(title, orderIndex, currentUser.organization_id);
     if (newProject) {
       await fetchBoardData(); 
       setShowAddProjectModalState(false);
@@ -119,9 +119,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [boardData, currentUser, fetchBoardData, toast]);
 
-  const updateProject = useCallback(async (updatedProject: ProjectColumn) => {
-    if (!currentUser || currentUser.role !== UserRole.ADMIN || !currentUser.organization_id || updatedProject.organization_id !== currentUser.organization_id) { 
-        toast({ title: "Permission Denied", description: "Only Admins can update projects within their organization.", variant: "destructive" });
+  const updateProject = useCallback(async (updatedProject: Omit<ProjectColumn, 'taskIds'>) => {
+     if (!currentUser || ![UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || !currentUser.organization_id || updatedProject.organization_id !== currentUser.organization_id) { 
+        toast({ title: "Permission Denied", description: "Only Admins or Org Maintainers can update projects.", variant: "destructive" });
         return;
     }
     const success = await supabaseService.updateProject(updatedProject);
@@ -150,10 +150,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ title: "Error", description: "Project not found or does not belong to your organization.", variant: "destructive" });
         return;
     }
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === projectId && m.role === ProjectRole.MAINTAINER);
+    const canAddTaskPermission = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
 
-    const canAddTaskPermission = currentUser?.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser?.id || '');
     if (!canAddTaskPermission) {
-        toast({ title: "Permission Denied", description: "Only Admins or Project Maintainers can add tasks.", variant: "destructive" });
+        toast({ title: "Permission Denied", description: "You do not have permission to add tasks to this project.", variant: "destructive" });
         return;
     }
     const orderIndex = project.taskIds.length; 
@@ -174,7 +175,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ title: "Error", description: "Project not found for task update or does not belong to your organization.", variant: "destructive" });
         return;
     }
-    const canUpdate = currentUser.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser.id);
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === updatedTask.projectId && m.role === ProjectRole.MAINTAINER);
+    const canUpdate = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+    
     if (!canUpdate) {
         toast({ title: "Permission Denied", description: "You do not have permission to update tasks in this project.", variant: "destructive" });
         setEditingTaskState(null); 
@@ -203,7 +206,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     
-    const canDelete = currentUser.role === UserRole.ADMIN || project.maintainerIds.includes(currentUser.id);
+    const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === projectId && m.role === ProjectRole.MAINTAINER);
+    const canDelete = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+
     if (!canDelete) {
         toast({ title: "Permission Denied", description: "You do not have permission to delete tasks in this project.", variant: "destructive" });
         hideConfirmationModal();
@@ -375,4 +380,3 @@ export const useData = (): DataContextType => {
   if (context === undefined) throw new Error('useData must be used within a DataProvider');
   return context;
 };
-

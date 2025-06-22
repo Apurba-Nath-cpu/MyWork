@@ -4,8 +4,18 @@ export type { DropResult, DraggableLocation };
 
 export enum UserRole {
   ADMIN = 'ADMIN',
+  ORG_MAINTAINER = 'ORG_MAINTAINER',
+  MEMBER = 'MEMBER',
+}
+
+export enum ProjectRole {
   MAINTAINER = 'MAINTAINER',
   MEMBER = 'MEMBER',
+}
+
+export interface ProjectMembership {
+  projectId: string;
+  role: ProjectRole;
 }
 
 export interface Organization {
@@ -22,6 +32,7 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   organization_id: string; // Foreign key to organizations table
+  projectMemberships: ProjectMembership[];
 }
 
 export enum TaskStatus {
@@ -54,7 +65,6 @@ export interface ProjectColumn {
   id: string; // Project ID
   title: string;
   taskIds: string[]; // Ordered list of task IDs
-  maintainerIds: string[]; // User IDs of maintainers
   organization_id: string; // Foreign key to organizations table
 }
 

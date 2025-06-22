@@ -12,13 +12,15 @@ const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { currentUser, logout } = useAuth();
   const { setShowAddProjectModal, setShowCreateUserModal } = useData();
+
+  const canCreateProject = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.ORG_MAINTAINER;
+  const canInviteUser = currentUser?.role === UserRole.ADMIN;
   
   return (
     <nav className="bg-neutral-200 dark:bg-neutral-800 p-4 shadow-md flex justify-between items-center flex-wrap gap-2">
       <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">{APP_TITLE}</h1>
       <div className="flex items-center space-x-2 sm:space-x-4">
-        {currentUser?.role === UserRole.ADMIN && (
-          <>
+        {canCreateProject && (
             <button
               onClick={() => setShowAddProjectModal(true)}
               className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
@@ -27,15 +29,16 @@ const Navbar: React.FC = () => {
             >
               <PlusCircleIcon className="w-6 h-6" />
             </button>
+        )}
+        {canInviteUser && (
             <button
               onClick={() => setShowCreateUserModal(true)}
               className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-              title="Create New User Profile"
-              aria-label="Create New User Profile"
+              title="Invite New User"
+              aria-label="Invite New User"
             >
               <UserPlusIcon className="w-6 h-6" />
             </button>
-          </>
         )}
         <button
           onClick={toggleTheme}
@@ -52,7 +55,7 @@ const Navbar: React.FC = () => {
             ) : (
                 <UserCircleIcon className="w-8 h-8 text-neutral-600 dark:text-neutral-300" />
             )}
-            <span className="text-sm hidden sm:inline">{currentUser.name} ({currentUser.role})</span>
+            <span className="text-sm hidden sm:inline">{currentUser.name} ({currentUser.role.replace('_', ' ')})</span>
             <button
               onClick={logout}
               className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"

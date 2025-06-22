@@ -7,7 +7,7 @@ import type { ProjectColumn, Task } from '../types';
 import TaskCard from './TaskCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
-import { UserRole } from '../types';
+import { UserRole, ProjectRole } from '../types';
 import { PlusIcon, TrashIcon, PencilIcon } from './custom-icons';
 import { DROPPABLE_TYPE_TASK } from '../lib/constants';
 
@@ -21,11 +21,13 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
   const { currentUser } = useAuth();
   const { setShowAddTaskModalForProject, requestProjectDeletion, setEditingProject } = useData();
 
-  const canAddTask = currentUser?.role === UserRole.ADMIN || 
-                     (project && Array.isArray(project.maintainerIds) && project.maintainerIds.includes(currentUser?.id || ""));
-  const canEditProject = currentUser?.role === UserRole.ADMIN;
-  const canDeleteProject = currentUser?.role === UserRole.ADMIN;
+  if (!currentUser) return null; // Should not happen if page is protected
 
+  const isProjectMaintainer = currentUser.projectMemberships.some(m => m.projectId === project.id && m.role === ProjectRole.MAINTAINER);
+
+  const canAddTask = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role) || isProjectMaintainer;
+  const canEditProject = [UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role);
+  const canDeleteProject = currentUser.role === UserRole.ADMIN;
 
   const handleDeleteProject = () => {
     if (!canDeleteProject) {
@@ -37,7 +39,7 @@ const ProjectColumnComponent: React.FC<ProjectColumnProps> = ({ project, tasks, 
 
   const handleEditProject = () => {
     if (!canEditProject) {
-        alert("Permission denied: Only Admins can edit projects.");
+        alert("Permission denied: Only Admins or Org Maintainers can edit projects.");
         return;
     }
     setEditingProject(project);

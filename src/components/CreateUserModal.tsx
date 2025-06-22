@@ -5,7 +5,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import Modal from './Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
-import { UserRole } from '../types';
+import { UserRole, ProjectRole } from '../types';
 import { useToast } from "@/hooks/use-toast";
 import { inviteUserAction, type InviteUserActionState } from '@/actions/userActions';
 
@@ -25,31 +25,42 @@ function SubmitButton() {
 
 const CreateUserModal: React.FC = () => {
   const { currentUser } = useAuth();
-  const { showCreateUserModal, setShowCreateUserModal } = useData();
+  const { showCreateUserModal, setShowCreateUserModal, boardData } = useData();
   const { toast } = useToast();
 
   const initialState: InviteUserActionState = { message: '', isError: false };
-  // Note: The form action is now managed by useFormState
   const [state, formAction] = useFormState(inviteUserAction, initialState);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState(UserRole.MEMBER);
+  const [projectAssignments, setProjectAssignments] = useState<Record<string, ProjectRole>>({});
+
+  const handleProjectAssignmentChange = (projectId: string, projectRole: ProjectRole | 'NONE') => {
+    setProjectAssignments(prev => {
+      const newAssignments = { ...prev };
+      if (projectRole === 'NONE') {
+        delete newAssignments[projectId];
+      } else {
+        newAssignments[projectId] = projectRole;
+      }
+      return newAssignments;
+    });
+  };
 
   const resetForm = () => {
       setName('');
       setEmail('');
       setRole(UserRole.MEMBER);
+      setProjectAssignments({});
   };
   
-  // Need to memoize handleClose to use in useEffect dependency array without causing infinite loops.
   const handleClose = React.useCallback(() => {
     resetForm();
     setShowCreateUserModal(false);
   }, [setShowCreateUserModal]);
 
   useEffect(() => {
-    // This effect runs when the server action returns a new state.
     if (state.message) {
       toast({
         title: state.isError ? "Invitation Error" : "Invitation Sent",
@@ -67,7 +78,6 @@ const CreateUserModal: React.FC = () => {
 
   return (
     <Modal isOpen={showCreateUserModal} onClose={handleClose} title="Invite New User">
-      {/* The form now calls the server action directly */}
       <form action={formAction} aria-labelledby="modal-title-create-user" className="space-y-4">
         
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
@@ -106,7 +116,7 @@ const CreateUserModal: React.FC = () => {
 
         <div>
           <label htmlFor="userRole" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Role
+            Organization Role
           </label>
           <select
             id="userRole"
@@ -117,14 +127,44 @@ const CreateUserModal: React.FC = () => {
           >
             {Object.values(UserRole).map(roleValue => (
               <option key={roleValue} value={roleValue}>
-                {roleValue.charAt(0).toUpperCase() + roleValue.slice(1).toLowerCase()}
+                {roleValue.replace('_', ' ').charAt(0).toUpperCase() + roleValue.replace('_', ' ').slice(1).toLowerCase()}
               </option>
             ))}
           </select>
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            Project Assignments (Optional)
+          </label>
+          <div className="max-h-48 overflow-y-auto border border-neutral-300 dark:border-neutral-600 rounded-md p-2 space-y-2 bg-white dark:bg-neutral-700">
+            {boardData && boardData.projectOrder.length > 0 ? (
+              boardData.projectOrder.map(projectId => {
+                const project = boardData.projects[projectId];
+                return (
+                  <div key={projectId} className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-800 dark:text-neutral-200">{project.title}</span>
+                    <select
+                      onChange={(e) => handleProjectAssignmentChange(projectId, e.target.value as ProjectRole | 'NONE')}
+                      value={projectAssignments[projectId] || 'NONE'}
+                      className="text-sm p-1 border border-neutral-300 dark:border-neutral-500 rounded-md bg-white dark:bg-neutral-600 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="NONE">None</option>
+                      <option value={ProjectRole.MEMBER}>Member</option>
+                      <option value={ProjectRole.MAINTAINER}>Maintainer</option>
+                    </select>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">No projects available to assign.</p>
+            )}
+          </div>
+        </div>
         
-        {/* Pass organizationId to the server action */}
         <input type="hidden" name="organizationId" value={currentUser?.organization_id || ''} />
+        <input type="hidden" name="projectAssignments" value={JSON.stringify(projectAssignments)} />
+
 
         <div className="mt-6 flex justify-end space-x-3">
           <button

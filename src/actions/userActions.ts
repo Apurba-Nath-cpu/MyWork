@@ -2,7 +2,7 @@
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
-import { UserRole } from '@/types';
+import { UserRole, ProjectRole } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 export interface InviteUserActionState {
@@ -18,6 +18,16 @@ export async function inviteUserAction(
   const email = formData.get('email') as string;
   const role = formData.get('role') as UserRole;
   const organizationId = formData.get('organizationId') as string;
+  const projectAssignmentsRaw = formData.get('projectAssignments') as string;
+
+  let projectAssignments: Record<string, ProjectRole> = {};
+  try {
+    if (projectAssignmentsRaw) {
+      projectAssignments = JSON.parse(projectAssignmentsRaw);
+    }
+  } catch (e) {
+    return { message: 'Invalid project assignments format.', isError: true };
+  }
 
   if (!name || !email || !role || !organizationId) {
     return { message: 'Missing required fields.', isError: true };
@@ -71,6 +81,32 @@ export async function inviteUserAction(
       isError: true,
     };
   }
+
+  // Insert project memberships if any were provided
+  const membershipsToInsert = Object.entries(projectAssignments)
+    .filter(([, projectRole]) => projectRole) // Filter out 'None'
+    .map(([projectId, projectRole]) => ({
+      user_id: invitedUser.id,
+      project_id: projectId,
+      role: projectRole,
+    }));
+  
+  if (membershipsToInsert.length > 0) {
+      const { error: membershipError } = await supabaseAdmin
+        .from('project_members')
+        .insert(membershipsToInsert);
+
+      if (membershipError) {
+        // Rollback user creation if memberships fail to insert
+        await supabaseAdmin.auth.admin.deleteUser(invitedUser.id);
+        // The user profile will be deleted automatically due to the foreign key constraint on users.id
+        return {
+          message: `Database error: Could not assign user to projects. ${membershipError.message}`,
+          isError: true,
+        };
+      }
+  }
+
 
   // Revalidate the path to refresh the user list on the page
   revalidatePath('/');
