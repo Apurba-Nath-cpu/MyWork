@@ -146,28 +146,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (!result.success || !result.user) {
       let errorMessage = result.error?.message || 'Could not create account and organization.';
-      if (result.error?.isEmailConflict) {
-        errorMessage = "User with this email already exists. Please try logging in.";
-      } else if (result.error?.isOrgNameConflict) {
-        errorMessage = "Organization name is already taken. Please choose another.";
+      if (result.error?.isOrgNameConflict) {
+        errorMessage = "This organization name is already taken. Please choose a different one.";
+      } else if (result.error?.isEmailConflict) {
+        errorMessage = "This email is already registered. Please try logging in or use a different email.";
       }
       return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
     
-    const { data: sessionData } = await supabaseService.getSession();
-    if (!result.user.email_confirmed_at && sessionData.session === null) {
-        toast({
-            title: "Sign Up Successful!",
-            description: "Please check your email to confirm your account.",
-        });
+    // After successful signup, immediately log the user in to create a session.
+    const loginResult = await login(email, password);
+
+    if (loginResult.success) {
+      toast({
+        title: "Sign Up Successful!",
+        description: "Your account has been created and you are now logged in.",
+      });
+      return { success: true };
     } else {
-         toast({
-            title: "Sign Up Successful!",
-            description: "Account and organization created. You will be logged in automatically.",
-        });
+      // This is a fallback case. Signup worked but login failed, which is unusual.
+      // The user will need to confirm their email (if enabled) and log in manually.
+      toast({
+          title: "Sign Up Successful!",
+          description: "Please check your email to confirm your account and then log in.",
+          variant: "default",
+      });
+      return { success: true }; // Signup was still a success.
     }
-    return { success: true, isOrgNameConflict: false, isEmailConflict: false };
-  }, [toast]);
+  }, [login, toast]);
 
   const logout = useCallback(async () => {
     const { error } = await supabaseService.signOutUser();

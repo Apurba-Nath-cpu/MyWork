@@ -230,11 +230,11 @@ const AuthScreen: React.FC = () => {
                   <label htmlFor="signupPassword" className={currentLabelClass}>Password (Admin)</label>
                   <input type="password" id="signupPassword" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Min. 6 characters" aria-required="true" />
                 </div>
-                <div>
+                {/* <div>
                   <label htmlFor="signupAvatar" className={currentLabelClass}>Profile Picture (Optional, &lt;2MB)</label>
                   <input type="file" id="signupAvatar" onChange={handleAvatarChange} accept="image/png, image/jpeg, image/gif" className={`block w-full text-xs sm:text-sm file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold ${theme === 'dark' ? 'text-neutral-400 file:bg-primary-600 file:text-white hover:file:bg-primary-700' : 'text-neutral-600 file:bg-primary-100 file:text-primary-700 hover:file:bg-primary-200'}`} />
                   {signupAvatarPreview && <img src={signupAvatarPreview} alt="Avatar preview" className="mt-3 w-20 h-20 rounded-full object-cover mx-auto shadow-md" />}
-                </div>
+                </div> */}
                 <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={signupLoading}>
                   {signupLoading ? 'Creating Account...' : 'Create Account & Organization'}
                 </button>
