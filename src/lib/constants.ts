@@ -2,7 +2,7 @@
 import type { User, BoardData } from '../types';
 import { UserRole } from '../types';
 
-export const APP_TITLE = "ProjectFlow";
+export const APP_TITLE = "MyWork";
 
 // Updated MOCK_USERS with placeholder UUIDs
 export const MOCK_USERS: User[] = [

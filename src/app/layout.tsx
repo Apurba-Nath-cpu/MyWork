@@ -7,7 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { DataProvider } from '@/contexts/DataContext';
 
 export const metadata: Metadata = {
-  title: 'ProjectFlow', // Updated from TaskFlow to match user's code
+  title: 'MyWork', // Updated from TaskFlow to match user's code
   description: 'Organize your projects, streamline your workflow.',
 };
 
