@@ -1,6 +1,5 @@
-
 "use client";
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import type { DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import type { DropResult, ProjectColumn, Task } from '../types'; 
@@ -20,7 +19,6 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import AuthScreen from '../components/AuthScreen';
 import ManageUserAccessModal from '../components/ManageUserAccessModal';
 import CommentsModal from '../components/CommentsModal';
-
 
 const HomePage: React.FC = () => {
   const { theme } = useTheme();
@@ -45,6 +43,21 @@ const HomePage: React.FC = () => {
     searchTerm,
     isFocusMode,
   } = useData();
+
+  // Add a state to track how long we've been loading
+  const [loadingDuration, setLoadingDuration] = useState(0);
+
+  useEffect(() => {
+    if (loadingAuth) {
+      const interval = setInterval(() => {
+        setLoadingDuration(prev => prev + 1);
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    } else {
+      setLoadingDuration(0);
+    }
+  }, [loadingAuth]);
 
   useEffect(() => {
     if (currentUser && !loadingAuth && currentUser.organization_id) {
@@ -128,7 +141,6 @@ const HomePage: React.FC = () => {
 
   }, [boardData, currentUser, isFocusMode, searchTerm]);
 
-
   const onDragEnd = useCallback((result: DropResult) => {
     if (!currentUser) {
       return;
@@ -187,11 +199,31 @@ const HomePage: React.FC = () => {
   if (loadingAuth) {
     return (
       <div className={`flex flex-col h-screen font-sans ${theme} items-center justify-center`}>
-        <div className="p-4 text-center text-lg text-foreground">Authenticating...</div>
+        <div className="p-4 text-center text-lg text-foreground">
+          Authenticating...
+          {loadingDuration > 5 && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              This is taking longer than usual ({loadingDuration}s)
+            </div>
+          )}
+          {loadingDuration > 10 && (
+            <div className="mt-2 text-sm text-destructive">
+              If this continues, try refreshing the page
+            </div>
+          )}
+        </div>
         <svg className="animate-spin h-8 w-8 text-primary mt-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
+        {loadingDuration > 8 && (
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+          >
+            Refresh Page
+          </button>
+        )}
       </div>
     );
   }
