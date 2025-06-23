@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useEffect, FormEvent, useCallback } from 'react';
+import React, { useState, useEffect, FormEvent, useCallback, useMemo } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,31 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   const [newComment, setNewComment] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
+  const canComment = useMemo(() => {
+    if (!currentUser) return false;
+
+    // Rule 1: Admin or Org Maintainer can always comment.
+    if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) {
+      return true;
+    }
+
+    // Rule 2: Any member of the project can comment.
+    const isProjectMember = currentUser.projectMemberships.some(
+      (m) => m.projectId === task.projectId
+    );
+    if (isProjectMember) {
+      return true;
+    }
+
+    // Rule 3: Any user assigned to the task can comment.
+    const isAssignee = task.assigneeIds.includes(currentUser.id);
+    if (isAssignee) {
+      return true;
+    }
+
+    return false;
+  }, [currentUser, task]);
+
   const fetchAndSetComments = useCallback(async () => {
     setLoadingComments(true);
     const fetchedComments = await getCommentsForTask(task.id);
@@ -47,6 +72,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
       setNewComment('');
       await fetchAndSetComments();
     }
+    // The service layer handles showing the error toast, so we just re-enable the form.
     setIsSubmittingComment(false);
   };
   
@@ -99,20 +125,22 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
     <Modal isOpen={true} onClose={onClose} title={`Comments for: ${task.title}`}>
       <div className="space-y-4 max-h-[70vh] flex flex-col">
         
-        <form onSubmit={handleAddComment} className="space-y-2 sticky top-0 bg-card pt-2 pb-4 border-b">
-          <Textarea
-            placeholder="Add a comment..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            disabled={isSubmittingComment}
-            rows={3}
-          />
-          <div className="flex justify-end">
-            <Button type="submit" disabled={!newComment.trim() || isSubmittingComment}>
-              {isSubmittingComment ? 'Posting...' : 'Post Comment'}
-            </Button>
-          </div>
-        </form>
+        {canComment && (
+          <form onSubmit={handleAddComment} className="space-y-2 sticky top-0 bg-card pt-2 pb-4 border-b">
+            <Textarea
+              placeholder="Add a comment..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              disabled={isSubmittingComment}
+              rows={3}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!newComment.trim() || isSubmittingComment}>
+                {isSubmittingComment ? 'Posting...' : 'Post Comment'}
+              </Button>
+            </div>
+          </form>
+        )}
 
         <div className="flex-grow overflow-y-auto pr-2 space-y-4">
           {loadingComments ? (
