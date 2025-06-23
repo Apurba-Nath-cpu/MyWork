@@ -46,6 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (authUser) {
       try {
         if (!isInitialLoad) {
+          // Small delay to allow DB replication after signup
           await new Promise(res => setTimeout(res, 200));
         }
         
@@ -54,10 +55,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (userProfile) {
           setCurrentUser(userProfile);
         } else {
+          // If a supabase user exists but we can't find a profile, it's an inconsistent state.
+          // The user might have been deleted from the users table but not from auth.
+          // The safest thing is to log them out to prevent app errors.
+          await supabaseService.signOutUser();
           setCurrentUser(null);
           setSupabaseUser(null);
         }
       } catch (error) {
+        // If any error occurs fetching profile, sign out to be safe.
+        await supabaseService.signOutUser();
         setCurrentUser(null);
         setSupabaseUser(null);
       }
@@ -74,24 +81,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let mounted = true;
     const { data: authListener } = supabaseService.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      
+
       if (event === 'PASSWORD_RECOVERY') {
         setIsResettingPassword(true);
-        setCurrentUser(null);
         setSupabaseUser(session?.user ?? null);
+        setCurrentUser(null);
         setLoadingAuth(false);
-      } else {
-        // Any other event means we are not in password recovery mode.
-        setIsResettingPassword(false);
-        await handleAuthUserChange(session?.user ?? null, event === 'INITIAL_SESSION');
+        return; // Halt further processing to stay on the reset screen
       }
+      
+      // If we are in password reset mode, we should ignore other auth events
+      // that could incorrectly log the user in. The only event we care about
+      // in this mode is SIGNED_OUT, which happens after a successful password update or manual logout.
+      if (isResettingPassword) {
+        if (event === 'SIGNED_OUT') {
+           setIsResettingPassword(false);
+           setCurrentUser(null);
+           setSupabaseUser(null);
+           setLoadingAuth(false);
+        }
+        return;
+      }
+      
+      // For all other events (INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED)
+      // when not in password recovery mode, run the standard authentication flow.
+      await handleAuthUserChange(session?.user ?? null, event === 'INITIAL_SESSION');
     });
 
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [handleAuthUserChange]);
+  }, [handleAuthUserChange, isResettingPassword]);
 
   useEffect(() => {
     if (currentUser?.organization_id) {
@@ -122,43 +143,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
     
-    const loginResult = await login(email, password);
-
-    if (loginResult.success) {
-      toast({
+    // After sign up, prompt user to check email instead of auto-logging in, as confirmation is required.
+    toast({
         title: "Sign Up Successful!",
-        description: "Your account has been created and you are now logged in.",
-      });
-      return { success: true };
-    } else {
-      toast({
-          title: "Sign Up Successful!",
-          description: "Please check your email to confirm your account and then log in.",
-          variant: "default",
-      });
-      return { success: true };
-    }
-  }, [login, toast]);
+        description: "Please check your email to confirm your account and then log in.",
+        variant: "default",
+    });
+    return { success: true };
+  }, [toast]);
 
   const logout = useCallback(async () => {
+    // The onAuthStateChange listener will handle clearing the state when it receives the SIGNED_OUT event.
+    // We just need to trigger the sign out.
     const { error } = await supabaseService.signOutUser();
-
     if (error) {
-      if (error.message.includes("Auth session missing") || error.message.includes("No active session")) {
-        setCurrentUser(null);
-        setUsers([]);
-        setSupabaseUser(null);
-        setLoadingAuth(false);
-      } else {
-        toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
-        setLoadingAuth(false);
-      }
-    } else {
-      // This handles the case where logout is successful, ensuring state is cleared.
+       // Even if sign out from server fails, clear local state to prevent being stuck.
        setCurrentUser(null);
        setUsers([]);
        setSupabaseUser(null);
+       setIsResettingPassword(false);
        setLoadingAuth(false);
+       toast({ title: "Logout Failed", description: "Could not sign out properly, but session cleared locally.", variant: "destructive" });
     }
   }, [toast]);
 
@@ -190,8 +195,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: error.message };
     }
     
-    // After a successful password update, the user should be logged out
-    // of the recovery session and redirected to log in with their new password.
+    // After a successful password update, log the user out of the recovery session.
+    // The listener will then redirect to the login screen.
     await logout();
 
     toast({
@@ -218,5 +223,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
-    
