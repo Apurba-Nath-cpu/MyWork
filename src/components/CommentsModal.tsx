@@ -34,14 +34,6 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
 
 
   const nameToUserMap = useMemo(() => new Map(users.map(u => [u.name.replace(/\s/g, ''), u])), [users]);
-
-  const canComment = useMemo(() => {
-    if (!currentUser) return false;
-    if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) return true;
-    if (currentUser.projectMemberships.some((m) => m.projectId === task.projectId)) return true;
-    if (task.assigneeIds.includes(currentUser.id)) return true;
-    return false;
-  }, [currentUser, task]);
   
   const filteredMentionSuggestions = useMemo(() => {
     if (!mentionQuery) return users;
@@ -58,6 +50,34 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   useEffect(() => {
     fetchAndSetComments();
   }, [fetchAndSetComments]);
+
+  const canComment = useMemo(() => {
+    if (!currentUser) return false;
+    // Rule 1: Admins and Org Maintainers can always comment.
+    if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) {
+      return true;
+    }
+    // Rule 2: Any member of the project can comment.
+    const isProjectMember = currentUser.projectMemberships.some(
+      (m) => m.projectId === task.projectId
+    );
+    if (isProjectMember) {
+      return true;
+    }
+    // Rule 3: Any user assigned to the task can comment.
+    if (task.assigneeIds.includes(currentUser.id)) {
+      return true;
+    }
+    // Rule 4: Any user mentioned in a comment on this task can comment.
+    const isMentioned = comments.some(comment => 
+        comment.mentionedUserIds?.includes(currentUser.id)
+    );
+    if (isMentioned) {
+        return true;
+    }
+
+    return false;
+  }, [currentUser, task, comments]);
   
   useEffect(() => {
     setHighlightedMentionIndex(0);
