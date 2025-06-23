@@ -176,52 +176,71 @@ const HomePage: React.FC = () => {
     );
   }
 
+  const showNoResults = boardData && boardData.projectOrder.length > 0 && filteredBoardData.projectOrder.length === 0;
+
   return (
     <div className={`flex flex-col h-screen font-sans ${theme} bg-background text-foreground`}>
       <Navbar />
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex-grow p-4 overflow-x-auto hide-scrollbar"> 
-          <Droppable 
-            droppableId="all-projects" 
-            direction="horizontal" 
-            type={DROPPABLE_TYPE_PROJECT}
-          >
-            {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className={`flex w-max space-x-4 items-start p-2 ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800' : ''}`}
+
+      <div className="flex-grow flex flex-col overflow-hidden">
+        {showNoResults ? (
+          <div className="flex-grow flex items-center justify-center">
+            <div className="text-center text-neutral-500 dark:text-neutral-400">
+              <h3 className="text-lg font-semibold">No results found</h3>
+              <p>Try adjusting your search term.</p>
+            </div>
+          </div>
+        ) : (
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex-grow p-4 overflow-x-auto hide-scrollbar">
+              <Droppable
+                droppableId="all-projects"
+                direction="horizontal"
+                type={DROPPABLE_TYPE_PROJECT}
               >
-                {filteredBoardData.projectOrder.map((projectId: string, index: number) => {
-                  const project: ProjectColumn | undefined = filteredBoardData.projects[projectId];
-                  if (!project) {
-                    return null; 
-                  }
-                  const tasks: Task[] = project.taskIds
-                    .map((taskId: string): Task | undefined => boardData.tasks[taskId]) // Use original boardData for full task info
-                    .filter((task?: Task): task is Task => !!task); 
-                  
-                  return (
-                    <ProjectColumnComponent
-                      key={project.id}
-                      project={project} 
-                      tasks={tasks}
-                      index={index}
-                    />
-                  );
-                })}
-                {provided.placeholder}
-                {boardData && boardData.projectOrder.length > 0 && filteredBoardData.projectOrder.length === 0 && (
-                    <div className="p-8 text-center text-neutral-500 dark:text-neutral-400">
-                        <h3 className="text-lg font-semibold">No results found</h3>
-                        <p>Try adjusting your search term.</p>
-                    </div>
+                {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className={`flex w-max space-x-4 items-start p-2 ${
+                      snapshot.isDraggingOver
+                        ? 'bg-neutral-200 dark:bg-neutral-800'
+                        : ''
+                    }`}
+                  >
+                    {filteredBoardData.projectOrder.map(
+                      (projectId: string, index: number) => {
+                        const project: ProjectColumn | undefined =
+                          filteredBoardData.projects[projectId];
+                        if (!project) {
+                          return null;
+                        }
+                        const tasks: Task[] = project.taskIds
+                          .map(
+                            (taskId: string): Task | undefined =>
+                              boardData.tasks[taskId]
+                          ) // Use original boardData for full task info
+                          .filter((task?: Task): task is Task => !!task);
+
+                        return (
+                          <ProjectColumnComponent
+                            key={project.id}
+                            project={project}
+                            tasks={tasks}
+                            index={index}
+                          />
+                        );
+                      }
+                    )}
+                    {provided.placeholder}
+                  </div>
                 )}
-              </div>
-            )}
-          </Droppable>
-        </div>
-      </DragDropContext>
+              </Droppable>
+            </div>
+          </DragDropContext>
+        )}
+      </div>
+      
       {showAddProjectModal && <AddProjectModal />}
       {showAddTaskModalForProject && <AddTaskModal projectId={showAddTaskModalForProject} />}
       {showCreateUserModal && <CreateUserModal />}
