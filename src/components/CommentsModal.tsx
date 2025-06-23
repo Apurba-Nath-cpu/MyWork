@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useEffect, FormEvent, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,21 +25,27 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   const [loadingComments, setLoadingComments] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+
+  const nameToUserMap = useMemo(() => new Map(users.map(u => [u.name.replace(/\s/g, ''), u])), [users]);
 
   const canComment = useMemo(() => {
     if (!currentUser) return false;
-    // Admins and Org Maintainers can always comment
+    // Rule 1: Admins and Org Maintainers can always comment.
     if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) {
       return true;
     }
-    // Any member of the project can comment
+    // Rule 2: Any member of the project can comment.
     const isProjectMember = currentUser.projectMemberships.some(
       (m) => m.projectId === task.projectId
     );
     if (isProjectMember) {
       return true;
     }
-    // Any user assigned to the task can comment
+    // Rule 3: Any user assigned to the task can comment.
     const isAssignee = task.assigneeIds.includes(currentUser.id);
     if (isAssignee) {
       return true;
@@ -58,17 +64,54 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
     fetchAndSetComments();
   }, [fetchAndSetComments]);
 
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+
+    const cursorPos = e.target.selectionStart;
+    const textBeforeCursor = text.substring(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+
+    if (mentionMatch) {
+        setShowMentionSuggestions(true);
+        setMentionQuery(mentionMatch[1]);
+    } else {
+        setShowMentionSuggestions(false);
+    }
+  };
+
+  const handleMentionSelect = (user: Pick<User, 'id' | 'name'>) => {
+    const cursorPos = textareaRef.current?.selectionStart ?? 0;
+    const textBeforeCursor = newComment.substring(0, cursorPos);
+    
+    const mentionPattern = /@(\w*)$/;
+    const safeUsername = user.name.replace(/\s/g, '');
+    const replacedText = textBeforeCursor.replace(mentionPattern, `@${safeUsername} `);
+
+    setNewComment(replacedText + newComment.substring(cursorPos));
+    setShowMentionSuggestions(false);
+    
+    // Use a timeout to ensure focus happens after the state update has rendered
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
   const handleAddComment = async (e: FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
+    // Parse mentions
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    const mentionedUsernames = new Set(Array.from(newComment.matchAll(mentionRegex), m => m[1]));
+    const mentionedUserIds = Array.from(mentionedUsernames)
+      .map(username => nameToUserMap.get(username)?.id)
+      .filter((id): id is string => !!id);
+
     setIsSubmittingComment(true);
-    const added = await addComment(task.id, newComment.trim());
+    const added = await addComment(task.id, newComment.trim(), mentionedUserIds);
     if (added) {
       setNewComment('');
       await fetchAndSetComments();
     }
-    // The service layer handles showing the error toast, so we just re-enable the form.
     setIsSubmittingComment(false);
   };
   
@@ -92,50 +135,79 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
         }
     }
     
-    // Default to 'Member' if not a maintainer or if user not found
     return 'Member';
   };
 
   const canDeleteComment = (comment: Comment) => {
     if (!currentUser) return false;
-
-    // Rule 1: Anyone can delete their own comment.
-    if (comment.userId === currentUser.id) {
-      return true;
-    }
-
-    // Rule 2: An ADMIN can delete any comment.
-    if (currentUser.role === UserRole.ADMIN) {
-      return true;
-    }
-
-    // Rule 3: An ORG_MAINTAINER can delete any comment EXCEPT those from an ADMIN.
-    if (currentUser.role === UserRole.ORG_MAINTAINER && comment.user.role !== UserRole.ADMIN) {
-      return true;
-    }
-
+    if (comment.userId === currentUser.id) return true;
+    if (currentUser.role === UserRole.ADMIN) return true;
+    if (currentUser.role === UserRole.ORG_MAINTAINER && comment.user.role !== UserRole.ADMIN) return true;
     return false;
   };
+  
+  const renderWithMentions = (text: string) => {
+    const mentionRegex = /(@[a-zA-Z0-9_]+)/g;
+    
+    return text.split(mentionRegex).map((part, index) => {
+        if (part.startsWith('@')) {
+            const username = part.substring(1);
+            if (nameToUserMap.has(username)) {
+                return <strong key={index} className="text-primary font-semibold bg-primary/10 px-1 rounded">{part}</strong>;
+            }
+        }
+        return part;
+    });
+  };
+  
+  const filteredMentionSuggestions = useMemo(() => {
+    if (!mentionQuery) return users;
+    return users.filter(user => user.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+  }, [mentionQuery, users]);
 
   return (
     <Modal isOpen={true} onClose={onClose} title={`Comments for: ${task.title}`}>
       <div className="space-y-4 max-h-[70vh] flex flex-col">
         
         {canComment && (
-          <form onSubmit={handleAddComment} className="space-y-2 sticky top-0 bg-card pt-2 pb-4 border-b">
-            <Textarea
-              placeholder="Add a comment..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              disabled={isSubmittingComment}
-              rows={3}
-            />
-            <div className="flex justify-end">
-              <Button type="submit" disabled={!newComment.trim() || isSubmittingComment}>
-                {isSubmittingComment ? 'Posting...' : 'Post Comment'}
-              </Button>
-            </div>
-          </form>
+          <div className="relative">
+            <form onSubmit={handleAddComment} className="space-y-2 sticky top-0 bg-card pt-2 pb-4 border-b">
+              <Textarea
+                ref={textareaRef}
+                placeholder="Add a comment... Type @ to mention a user."
+                value={newComment}
+                onChange={handleCommentChange}
+                disabled={isSubmittingComment}
+                rows={3}
+              />
+              <div className="flex justify-end">
+                <Button type="submit" disabled={!newComment.trim() || isSubmittingComment}>
+                  {isSubmittingComment ? 'Posting...' : 'Post Comment'}
+                </Button>
+              </div>
+            </form>
+            {showMentionSuggestions && (
+              <div className="absolute z-10 w-full max-h-48 overflow-y-auto bg-card border border-border rounded-md shadow-lg mt-1">
+                {filteredMentionSuggestions.length > 0 ? (
+                  filteredMentionSuggestions.map(user => (
+                    <div
+                      key={user.id}
+                      onClick={() => handleMentionSelect(user)}
+                      className="flex items-center p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                    >
+                      <Avatar className="h-6 w-6 mr-2">
+                        <AvatarImage src={user.avatarUrl} alt={user.name} />
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{user.name}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-muted-foreground">No users found</div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <div className="flex-grow overflow-y-auto pr-2 space-y-4">
@@ -165,7 +237,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
                         )}
                       </div>
                     </div>
-                    <p className="text-sm text-foreground mt-2 whitespace-pre-wrap break-words">{comment.content}</p>
+                    <p className="text-sm text-foreground mt-2 whitespace-pre-wrap break-words">{renderWithMentions(comment.content)}</p>
                   </div>
                 </div>
               )

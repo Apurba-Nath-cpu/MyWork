@@ -692,6 +692,7 @@ export const getCommentsForTask = async (taskId: string): Promise<Comment[]> => 
       content,
       created_at,
       user_id,
+      mentioned_user_ids,
       users ( id, name, avatar_url, role )
     `)
     .eq('task_id', taskId)
@@ -707,6 +708,7 @@ export const getCommentsForTask = async (taskId: string): Promise<Comment[]> => 
       createdAt: c.created_at,
       taskId: taskId,
       userId: c.user_id,
+      mentionedUserIds: c.mentioned_user_ids || [],
       user: {
           id: c.users.id,
           name: c.users.name,
@@ -716,16 +718,22 @@ export const getCommentsForTask = async (taskId: string): Promise<Comment[]> => 
   }));
 };
 
-export const addComment = async (taskId: string, userId: string, content: string): Promise<Comment | null> => {
+export const addComment = async (taskId: string, userId: string, content: string, mentionedUserIds: string[]): Promise<Comment | null> => {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('comments')
-    .insert({ task_id: taskId, user_id: userId, content })
+    .insert({
+      task_id: taskId,
+      user_id: userId,
+      content,
+      mentioned_user_ids: mentionedUserIds.length > 0 ? mentionedUserIds : null,
+    })
     .select(`
       id,
       content,
       created_at,
       user_id,
+      mentioned_user_ids,
       users ( id, name, avatar_url, role )
     `)
     .single();
@@ -742,6 +750,7 @@ export const addComment = async (taskId: string, userId: string, content: string
     createdAt: c.created_at,
     taskId: taskId,
     userId: c.user_id,
+    mentionedUserIds: c.mentioned_user_ids || [],
     user: {
       id: c.users.id,
       name: c.users.name,

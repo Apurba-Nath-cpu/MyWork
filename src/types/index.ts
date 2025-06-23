@@ -69,6 +69,7 @@ export interface Comment {
   userId: string;
   createdAt: string;
   user: Pick<User, 'id' | 'name' | 'avatarUrl' | 'role'>;
+  mentionedUserIds?: string[];
 }
 
 export interface ProjectColumn {
@@ -148,7 +149,7 @@ export interface DataContextType {
   moveTaskBetweenProjects: (startProjectId: string, finishProjectId: string, taskId: string, newIndex: number) => Promise<void>;
   updateTask: (updatedTask: Task) => Promise<void>;
   getCommentsForTask: (taskId: string) => Promise<Comment[]>;
-  addComment: (taskId: string, content: string) => Promise<Comment | null>;
+  addComment: (taskId: string, content: string, mentionedUserIds: string[]) => Promise<Comment | null>;
   deleteComment: (commentId: string, taskId: string) => Promise<void>;
   
   showAddProjectModal: boolean;

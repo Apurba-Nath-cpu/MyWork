@@ -27,7 +27,7 @@ interface DataContextType {
   moveTaskBetweenProjects: (startProjectId: string, finishProjectId: string, taskId: string, newIndex: number) => Promise<void>;
   updateTask: (updatedTask: Task) => Promise<void>;
   getCommentsForTask: (taskId: string) => Promise<Comment[]>;
-  addComment: (taskId: string, content: string) => Promise<Comment | null>;
+  addComment: (taskId: string, content: string, mentionedUserIds: string[]) => Promise<Comment | null>;
   deleteComment: (commentId: string, taskId: string) => Promise<void>;
   
   showAddProjectModal: boolean;
@@ -377,9 +377,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return supabaseService.getCommentsForTask(taskId);
   }, []);
 
-  const addComment = useCallback(async (taskId: string, content: string): Promise<Comment | null> => {
+  const addComment = useCallback(async (taskId: string, content: string, mentionedUserIds: string[]): Promise<Comment | null> => {
     if (!currentUser) return null;
-    const newComment = await supabaseService.addComment(taskId, currentUser.id, content);
+    const newComment = await supabaseService.addComment(taskId, currentUser.id, content, mentionedUserIds);
     if (newComment) {
       // Optimistically update the comment count on the board
       setBoardData(prev => {
