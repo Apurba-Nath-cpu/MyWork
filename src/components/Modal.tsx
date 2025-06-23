@@ -1,4 +1,3 @@
-
 "use client";
 import React, { ReactNode, useEffect } from 'react';
 import { XIcon } from './custom-icons'; 
@@ -38,22 +37,22 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
       onClick={onClose} 
     >
       <div
-        className="bg-white dark:bg-neutral-800 p-6 rounded-lg shadow-xl w-full max-w-md m-4 transform transition-all duration-300 ease-in-out scale-100"
+        className="bg-card text-card-foreground p-6 rounded-lg shadow-xl w-full max-w-md m-4 transform transition-all duration-300 ease-in-out scale-100"
         onClick={(e) => e.stopPropagation()} 
       >
         <div className="flex justify-between items-center mb-4">
-          <h2 id="modal-title" className="text-xl font-semibold text-neutral-800 dark:text-neutral-100">
+          <h2 id="modal-title" className="text-xl font-semibold">
             {title}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="p-1 rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
             aria-label="Close modal"
           >
             <XIcon className="w-6 h-6" />
           </button>
         </div>
-        <div className="text-neutral-700 dark:text-neutral-300">
+        <div>
           {children}
         </div>
       </div>
