@@ -77,10 +77,25 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   };
 
   const canDeleteComment = (comment: Comment) => {
-      if(!currentUser) return false;
-      if(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.ORG_MAINTAINER) return true;
-      return comment.userId === currentUser.id;
-  }
+    if (!currentUser) return false;
+
+    // Rule 1: Anyone can delete their own comment.
+    if (comment.userId === currentUser.id) {
+      return true;
+    }
+
+    // Rule 2: An ADMIN can delete any comment.
+    if (currentUser.role === UserRole.ADMIN) {
+      return true;
+    }
+
+    // Rule 3: An ORG_MAINTAINER can delete any comment EXCEPT those from an ADMIN.
+    if (currentUser.role === UserRole.ORG_MAINTAINER && comment.user.role !== UserRole.ADMIN) {
+      return true;
+    }
+
+    return false;
+  };
 
   return (
     <Modal isOpen={true} onClose={onClose} title={`Comments for: ${task.title}`}>
