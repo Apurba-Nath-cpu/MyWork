@@ -36,25 +36,10 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   useEffect(() => {
     fetchAndSetComments();
   }, [fetchAndSetComments]);
-  
-  const canComment = React.useMemo(() => {
-    if (!currentUser) return false;
-    if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.ORG_MAINTAINER) {
-      return true;
-    }
-    const membership = currentUser.projectMemberships.find(m => m.projectId === task.projectId);
-    if (membership?.role === ProjectRole.MAINTAINER) {
-      return true;
-    }
-    if (membership?.role === ProjectRole.MEMBER && task.assigneeIds.includes(currentUser.id)) {
-      return true;
-    }
-    return false;
-  }, [currentUser, task.projectId, task.assigneeIds]);
 
   const handleAddComment = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !canComment) return;
+    if (!newComment.trim()) return;
 
     setIsSubmittingComment(true);
     const added = await addComment(task.id, newComment.trim());
@@ -116,14 +101,14 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
         
         <form onSubmit={handleAddComment} className="space-y-2 sticky top-0 bg-card pt-2 pb-4 border-b">
           <Textarea
-            placeholder={canComment ? "Add a comment..." : "You don't have permission to comment on this task."}
+            placeholder="Add a comment..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            disabled={!canComment || isSubmittingComment}
+            disabled={isSubmittingComment}
             rows={3}
           />
           <div className="flex justify-end">
-            <Button type="submit" disabled={!canComment || !newComment.trim() || isSubmittingComment}>
+            <Button type="submit" disabled={!newComment.trim() || isSubmittingComment}>
               {isSubmittingComment ? 'Posting...' : 'Post Comment'}
             </Button>
           </div>
