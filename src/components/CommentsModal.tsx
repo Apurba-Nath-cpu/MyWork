@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import Modal from './Modal';
@@ -29,27 +28,17 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
 
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [highlightedMentionIndex, setHighlightedMentionIndex] = useState(0);
+  const suggestionsContainerRef = useRef<HTMLDivElement>(null);
+
 
   const nameToUserMap = useMemo(() => new Map(users.map(u => [u.name.replace(/\s/g, ''), u])), [users]);
 
   const canComment = useMemo(() => {
     if (!currentUser) return false;
-    // Rule 1: Admins and Org Maintainers can always comment.
-    if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) {
-      return true;
-    }
-    // Rule 2: Any member of the project can comment.
-    const isProjectMember = currentUser.projectMemberships.some(
-      (m) => m.projectId === task.projectId
-    );
-    if (isProjectMember) {
-      return true;
-    }
-    // Rule 3: Any user assigned to the task can comment.
-    const isAssignee = task.assigneeIds.includes(currentUser.id);
-    if (isAssignee) {
-      return true;
-    }
+    if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) return true;
+    if (currentUser.projectMemberships.some((m) => m.projectId === task.projectId)) return true;
+    if (task.assigneeIds.includes(currentUser.id)) return true;
     return false;
   }, [currentUser, task]);
 
@@ -63,6 +52,20 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   useEffect(() => {
     fetchAndSetComments();
   }, [fetchAndSetComments]);
+  
+  useEffect(() => {
+    setHighlightedMentionIndex(0);
+  }, [mentionQuery]);
+
+  useEffect(() => {
+    if (showMentionSuggestions && suggestionsContainerRef.current && filteredMentionSuggestions.length > 0) {
+      const highlightedElement = suggestionsContainerRef.current.children[highlightedMentionIndex] as HTMLElement;
+      if (highlightedElement) {
+        highlightedElement.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedMentionIndex, showMentionSuggestions, filteredMentionSuggestions]);
+
 
   const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
@@ -79,6 +82,22 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
         setShowMentionSuggestions(false);
     }
   };
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showMentionSuggestions && filteredMentionSuggestions.length > 0) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedMentionIndex(prev => (prev + 1) % filteredMentionSuggestions.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedMentionIndex(prev => (prev - 1 + filteredMentionSuggestions.length) % filteredMentionSuggestions.length);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            handleMentionSelect(filteredMentionSuggestions[highlightedMentionIndex]);
+        }
+    }
+  };
+
 
   const handleMentionSelect = (user: Pick<User, 'id' | 'name'>) => {
     const cursorPos = textareaRef.current?.selectionStart ?? 0;
@@ -91,7 +110,6 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
     setNewComment(replacedText + newComment.substring(cursorPos));
     setShowMentionSuggestions(false);
     
-    // Use a timeout to ensure focus happens after the state update has rendered
     setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
@@ -99,7 +117,6 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    // Parse mentions
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;
     const mentionedUsernames = new Set(Array.from(newComment.matchAll(mentionRegex), m => m[1]));
     const mentionedUserIds = Array.from(mentionedUsernames)
@@ -177,6 +194,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
                 placeholder="Add a comment... Type @ to mention a user."
                 value={newComment}
                 onChange={handleCommentChange}
+                onKeyDown={handleKeyDown}
                 disabled={isSubmittingComment}
                 rows={3}
               />
@@ -187,13 +205,20 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
               </div>
             </form>
             {showMentionSuggestions && (
-              <div className="absolute z-10 w-full max-h-48 overflow-y-auto bg-card border border-border rounded-md shadow-lg mt-1">
+              <div
+                ref={suggestionsContainerRef} 
+                className="absolute z-10 w-full max-h-48 overflow-y-auto bg-card border border-border rounded-md shadow-lg mt-1 hide-scrollbar"
+              >
                 {filteredMentionSuggestions.length > 0 ? (
-                  filteredMentionSuggestions.map(user => (
+                  filteredMentionSuggestions.map((user, index) => (
                     <div
                       key={user.id}
                       onClick={() => handleMentionSelect(user)}
-                      className="flex items-center p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                      onMouseOver={() => setHighlightedMentionIndex(index)}
+                      className={cn(
+                          "flex items-center p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer",
+                          index === highlightedMentionIndex && "bg-accent text-accent-foreground"
+                      )}
                     >
                       <Avatar className="h-6 w-6 mr-2">
                         <AvatarImage src={user.avatarUrl} alt={user.name} />
@@ -246,6 +271,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
             <div className="text-sm text-muted-foreground text-center py-4">
               {canComment ? (
                 <p>No comments yet. Be the first to comment!</p>
+
               ) : (
                 <p>There are no comments on this task yet.</p>
               )}
