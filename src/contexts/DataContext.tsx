@@ -1,7 +1,7 @@
 
 "use client";
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState, TaskStatus, TaskPriority, ProjectRole } from '../types';
+import { BoardData, ProjectColumn, Task, UserRole, User, ConfirmationModalState, TaskStatus, TaskPriority, ProjectRole, Comment } from '../types';
 import * as supabaseService from '../services/supabaseService'; 
 import { useAuth } from './AuthContext';
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +26,8 @@ interface DataContextType {
   moveTaskWithinProject: (projectId: string, taskId: string, newIndex: number) => Promise<void>;
   moveTaskBetweenProjects: (startProjectId: string, finishProjectId: string, taskId: string, newIndex: number) => Promise<void>;
   updateTask: (updatedTask: Task) => Promise<void>;
+  getCommentsForTask: (taskId: string) => Promise<Comment[]>;
+  addComment: (taskId: string, content: string) => Promise<Comment | null>;
   
   showAddProjectModal: boolean;
   setShowAddProjectModal: (show: boolean) => void;
@@ -366,6 +368,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await fetchBoardData(); 
     }
   }, [boardData, currentUser, fetchBoardData, toast]);
+
+  const getCommentsForTask = useCallback(async (taskId: string): Promise<Comment[]> => {
+    return supabaseService.getCommentsForTask(taskId);
+  }, []);
+
+  const addComment = useCallback(async (taskId: string, content: string): Promise<Comment | null> => {
+    if (!currentUser) return null;
+    const newComment = await supabaseService.addComment(taskId, currentUser.id, content);
+    if (newComment) {
+      // Optimistically update the comment count on the board
+      setBoardData(prev => {
+        if (!prev) return null;
+        const newTasks = { ...prev.tasks };
+        if (newTasks[taskId]) {
+          newTasks[taskId] = {
+            ...newTasks[taskId],
+            commentCount: (newTasks[taskId].commentCount || 0) + 1,
+          };
+        }
+        return { ...prev, tasks: newTasks };
+      });
+    } else {
+        toast({ title: "Error", description: "Failed to post comment. You may not have permission.", variant: "destructive" });
+    }
+    return newComment;
+  }, [currentUser, toast]);
   
   const setShowAddProjectModal = useCallback((show: boolean) => setShowAddProjectModalState(show), []);
   const setShowAddTaskModalForProject = useCallback((projectId: string | null) => {
@@ -379,7 +407,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <DataContext.Provider value={{
       boardData, usersForSuggestions, fetchBoardData, addProject, updateProject, addTask,
-      moveProject, moveTaskWithinProject, moveTaskBetweenProjects, updateTask,
+      moveProject, moveTaskWithinProject, moveTaskBetweenProjects, updateTask, getCommentsForTask, addComment,
       showAddProjectModal, setShowAddProjectModal, showAddTaskModalForProject, setShowAddTaskModalForProject,
       showCreateUserModal, setShowCreateUserModal, showManageAccessModal, setShowManageAccessModal,
       editingProject, setEditingProject, editingTask, setEditingTask,

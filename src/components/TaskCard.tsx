@@ -5,7 +5,7 @@ import { Draggable } from '@hello-pangea/dnd';
 import type { DraggableProvided, DraggableStateSnapshot } from '@hello-pangea/dnd';
 import { Task, UserRole, TaskStatus, TaskPriority, ProjectRole } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
-import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon, ExclamationTriangleIcon, CheckCircleIcon, CircleIcon, ClockIcon } from './custom-icons'; 
+import { UserCircleIcon, CalendarDaysIcon, TrashIcon, PencilIcon, ExclamationTriangleIcon, CheckCircleIcon, CircleIcon, ClockIcon, MessageSquareIcon } from './custom-icons'; 
 import { useData } from '../contexts/DataContext';
 import { Badge } from "@/components/ui/badge"; 
 import { cn } from "@/lib/utils";
@@ -65,10 +65,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   };
 
   const handleEdit = () => {
-    if (!canModifyTask) {
-        alert("Permission denied: You cannot edit this task.");
-        return;
-    }
+    // Note: The modal itself enforces editing permissions for saving, 
+    // but we can allow anyone who can see the task to open the modal to view details and comments.
     setEditingTask(task);
   };
 
@@ -84,17 +82,19 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            `bg-card text-card-foreground p-3 mb-3 rounded-lg shadow-md hover:shadow-lg transition-shadow ${canModifyTask ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} border-l-4`,
+            `bg-card text-card-foreground p-3 mb-3 rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4`,
             snapshot.isDragging ? 'ring-2 ring-primary dark:ring-primary-foreground' : '',
-            getPriorityClasses(task.priority || TaskPriority.P3) // Border color based on priority
+            getPriorityClasses(task.priority || TaskPriority.P3), // Border color based on priority
+            canModifyTask ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
           )}
+          onClick={handleEdit} // Open modal on click
         >
           <div className="flex justify-between items-start mb-2">
             <h4 className="font-semibold text-neutral-800 dark:text-neutral-100 break-all pr-2">{task.title}</h4>
             <div className="flex-shrink-0 flex items-center">
               {canModifyTask && (
                 <button 
-                    onClick={handleEdit}
+                    onClick={(e) => { e.stopPropagation(); handleEdit(); }}
                     className="text-neutral-500 hover:text-primary p-1 dark:text-neutral-400 dark:hover:text-primary-light"
                     title="Edit task"
                     aria-label={`Edit task ${task.title}`}
@@ -104,7 +104,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
               )}
               {canModifyTask && (
                 <button 
-                    onClick={handleDelete}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(); }}
                     className="text-neutral-500 hover:text-destructive p-1 ml-1 dark:text-neutral-400 dark:hover:text-destructive-light"
                     title="Delete task"
                     aria-label={`Delete task ${task.title}`}
@@ -117,21 +117,32 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
 
           {task.description && <p className="text-xs text-muted-foreground mb-2 break-words">{task.description}</p>}
           
-          <div className="flex flex-col space-y-2 text-xs text-muted-foreground mb-3">
-            <div className="flex items-center">
-              {getStatusIcon(task.status || TaskStatus.TODO)}
-              <span>{task.status || TaskStatus.TODO}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col space-y-2 text-xs text-muted-foreground mb-3">
+              <div className="flex items-center">
+                {getStatusIcon(task.status || TaskStatus.TODO)}
+                <span>{task.status || TaskStatus.TODO}</span>
+              </div>
+              <div className="flex items-center">
+                <CalendarDaysIcon className="w-3 h-3 mr-1" />
+                <span>ETA: {task.eta ? new Date(task.eta).toLocaleDateString() : 'Not set'}</span>
+              </div>
+              <div className="flex items-center">
+                <Badge variant="outline" className={cn("text-xs px-1.5 py-0.5", getPriorityClasses(task.priority || TaskPriority.P3))}>
+                  {task.priority || TaskPriority.P3}
+                </Badge>
+              </div>
             </div>
-            <div className="flex items-center">
-              <CalendarDaysIcon className="w-3 h-3 mr-1" />
-              <span>ETA: {task.eta ? new Date(task.eta).toLocaleDateString() : 'Not set'}</span>
-            </div>
-             <div className="flex items-center">
-              <Badge variant="outline" className={cn("text-xs px-1.5 py-0.5", getPriorityClasses(task.priority || TaskPriority.P3))}>
-                {task.priority || TaskPriority.P3}
-              </Badge>
-            </div>
+            
+            { (task.commentCount > 0) &&
+              <div className="flex items-center text-xs text-muted-foreground">
+                <MessageSquareIcon className="w-4 h-4 mr-1" />
+                <span>{task.commentCount}</span>
+              </div>
+            }
+
           </div>
+
 
           {task.tags && task.tags.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-1">

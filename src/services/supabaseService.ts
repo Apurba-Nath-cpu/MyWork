@@ -1,6 +1,6 @@
 
 import { createClient, type SupabaseClient, type Session, type User as SupabaseAuthUser, type AuthError as SupabaseAuthError, type PostgrestError as SupabasePostgrestError } from '@supabase/supabase-js';
-import { type BoardData, type ProjectColumn, type Task, type User, UserRole, ProjectRole, TaskStatus, TaskPriority, type Organization } from '../types';
+import { type BoardData, type ProjectColumn, type Task, type User, UserRole, ProjectRole, TaskStatus, TaskPriority, type Organization, type Comment } from '../types';
 import type { SignUpError, CreateUserAccountError } from '../types'; // Use extended types
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,7 +12,6 @@ export const supabase: SupabaseClient | null = (SUPABASE_URL && SUPABASE_ANON_KE
   : null;
 
 if (!supabase) {
-  // console.error('Supabase URL or Anon Key is not configured. Please check your .env file. The application will not connect to Supabase, but will continue to run.');
 }
 
 const createNotConfiguredError = (name: string) => ({
@@ -405,8 +404,9 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
   let tasksError: SupabasePostgrestError | null = null;
 
   if (projectIds.length > 0) {
+      // Use the view to get comment counts
       const { data, error } = await supabase
-        .from('tasks')
+        .from('tasks_with_comment_count')
         .select('*') 
         .in('project_id', projectIds)
         .order('project_id') 
@@ -446,6 +446,7 @@ export const getBoardData = async (organizationId: string): Promise<BoardData> =
       status: task.status as TaskStatus || TaskStatus.TODO,
       priority: task.priority as TaskPriority || TaskPriority.P2,
       tags: task.tags || [],
+      commentCount: task.comment_count,
     };
     if (boardData.projects[task.project_id]) {
       boardData.projects[task.project_id].taskIds.push(task.id);
@@ -549,6 +550,7 @@ export const createTask = async (
     status: data.status as TaskStatus,
     priority: data.priority as TaskPriority,
     tags: data.tags || [],
+    commentCount: 0,
   };
 };
 
@@ -649,4 +651,72 @@ export const updateTaskProjectAndOrder = async (
   } catch (error) {
     return false;
   }
+};
+
+export const getCommentsForTask = async (taskId: string): Promise<Comment[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('comments')
+    .select(`
+      id,
+      content,
+      created_at,
+      user_id,
+      users ( id, name, avatar_url, role )
+    `)
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    return [];
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map(c => ({
+      id: c.id,
+      content: c.content,
+      createdAt: c.created_at,
+      taskId: taskId,
+      userId: c.user_id,
+      user: {
+          id: c.users.id,
+          name: c.users.name,
+          avatarUrl: c.users.avatar_url,
+          role: c.users.role as UserRole,
+      }
+  }));
+};
+
+export const addComment = async (taskId: string, userId: string, content: string): Promise<Comment | null> => {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({ task_id: taskId, user_id: userId, content })
+    .select(`
+      id,
+      content,
+      created_at,
+      user_id,
+      users ( id, name, avatar_url, role )
+    `)
+    .single();
+  
+  if (error) {
+    return null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c = data as any;
+  return {
+    id: c.id,
+    content: c.content,
+    createdAt: c.created_at,
+    taskId: taskId,
+    userId: c.user_id,
+    user: {
+      id: c.users.id,
+      name: c.users.name,
+      avatarUrl: c.users.avatar_url,
+      role: c.users.role as UserRole,
+    }
+  };
 };

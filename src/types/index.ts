@@ -59,6 +59,16 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   tags: string[];
+  commentCount: number;
+}
+
+export interface Comment {
+  id: string;
+  content: string;
+  taskId: string;
+  userId: string;
+  createdAt: string;
+  user: Pick<User, 'id' | 'name' | 'avatarUrl' | 'role'>;
 }
 
 export interface ProjectColumn {
