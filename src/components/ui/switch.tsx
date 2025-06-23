@@ -23,7 +23,7 @@ const Switch = React.forwardRef<
       className={cn(
         "pointer-events-none block h-5 w-5 rounded-full shadow-lg ring-0 transition-transform",
         "data-[state=unchecked]:translate-x-0 data-[state=unchecked]:bg-neutral-500",
-        "data-[state=checked]:translate-x-5 data-[state=checked]:bg-white"
+        "data-[state=checked]:translate-x-5 data-[state=checked]:bg-yellow-500"
       )}
     />
   </SwitchPrimitives.Root>
