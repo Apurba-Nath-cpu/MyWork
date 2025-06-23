@@ -87,15 +87,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
             getPriorityClasses(task.priority || TaskPriority.P3), // Border color based on priority
             canModifyTask ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
           )}
-          onClick={handleEdit} // Open modal on click
         >
           <div className="flex justify-between items-start mb-2">
             <h4 className="font-semibold text-neutral-800 dark:text-neutral-100 break-all pr-2">{task.title}</h4>
-            <div className="flex-shrink-0 flex items-center">
+            <div className="flex-shrink-0 flex items-center space-x-1">
               {canModifyTask && (
                 <button 
                     onClick={(e) => { e.stopPropagation(); handleEdit(); }}
-                    className="text-neutral-500 hover:text-primary p-1 dark:text-neutral-400 dark:hover:text-primary-light"
+                    className="text-neutral-500 hover:text-primary p-1 dark:text-neutral-400 dark:hover:text-primary-light rounded-full"
                     title="Edit task"
                     aria-label={`Edit task ${task.title}`}
                 >
@@ -105,7 +104,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
               {canModifyTask && (
                 <button 
                     onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                    className="text-neutral-500 hover:text-destructive p-1 ml-1 dark:text-neutral-400 dark:hover:text-destructive-light"
+                    className="text-neutral-500 hover:text-destructive p-1 dark:text-neutral-400 dark:hover:text-destructive-light rounded-full"
                     title="Delete task"
                     aria-label={`Delete task ${task.title}`}
                 >
@@ -134,13 +133,15 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
               </div>
             </div>
             
-            { (task.commentCount > 0) &&
-              <div className="flex items-center text-xs text-muted-foreground">
-                <MessageSquareIcon className="w-4 h-4 mr-1" />
-                <span>{task.commentCount}</span>
-              </div>
-            }
-
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleEdit(); }} 
+              className="flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md"
+              title="View comments"
+              aria-label={`View comments for task ${task.title}`}
+            >
+              <MessageSquareIcon className="w-4 h-4 mr-1" />
+              <span>{task.commentCount || 0}</span>
+            </button>
           </div>
 
 

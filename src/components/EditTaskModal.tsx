@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from "@/lib/utils";
 
@@ -124,8 +125,12 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
   const filteredUsers = usersForSuggestions
     .filter(user => user.name.toLowerCase().includes(assigneeSearchTerm.toLowerCase()));
 
+  const formatRole = (role: UserRole) => {
+    return role.replace(/_/g, ' ').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+  };
+    
   return (
-    <Modal isOpen={!!task} onClose={() => setEditingTask(null)} title={`Edit Task: ${task.title}`}>
+    <Modal isOpen={!!task} onClose={() => setEditingTask(null)} title={`Task: ${task.title}`}>
       <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -202,10 +207,13 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
                             </Avatar>
                             <div className="flex-1">
                                 <div className="flex items-center justify-between">
-                                    <p className="text-sm font-semibold text-card-foreground">{comment.user.name}</p>
-                                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</p>
+                                  <div className="flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-card-foreground">{comment.user.name}</p>
+                                      <Badge variant="secondary" className="text-xs">{formatRole(comment.user.role)}</Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</p>
                                 </div>
-                                <p className="text-sm text-foreground mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
+                                <p className="text-sm text-foreground mt-2 whitespace-pre-wrap break-words">{comment.content}</p>
                             </div>
                         </div>
                         )
