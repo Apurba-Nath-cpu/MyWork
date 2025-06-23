@@ -76,43 +76,62 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [fetchUserProfileWithTimeout]);
   
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return;
 
-    let mounted = true;
-    const { data: authListener } = supabaseService.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+  let mounted = true;
+  
+  // Add timeout fallback to prevent infinite loading
+  const loadingTimeout = setTimeout(() => {
+    if (mounted) {
+      console.warn('Auth loading timeout - forcing loadingAuth to false');
+      setLoadingAuth(false);
+    }
+  }, 4000); // 10 second timeout
 
+  const { data: authListener } = supabaseService.onAuthStateChange(async (event, session) => {
+    console.log('Auth state change:', event, session?.user?.id); // Debug log
+    
+    if (!mounted) return;
+
+    try {
       if (event === 'PASSWORD_RECOVERY') {
         setIsResettingPassword(true);
         setSupabaseUser(session?.user ?? null);
         setCurrentUser(null);
         setLoadingAuth(false);
-        return; // Halt further processing to stay on the reset screen
+        clearTimeout(loadingTimeout);
+        return;
       }
       
-      // If we are in password reset mode, we should ignore other auth events
-      // that could incorrectly log the user in. The only event we care about
-      // in this mode is SIGNED_OUT, which happens after a successful password update or manual logout.
       if (isResettingPassword) {
         if (event === 'SIGNED_OUT') {
            setIsResettingPassword(false);
            setCurrentUser(null);
            setSupabaseUser(null);
            setLoadingAuth(false);
+           clearTimeout(loadingTimeout);
         }
         return;
       }
       
-      // For all other events (INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED)
-      // when not in password recovery mode, run the standard authentication flow.
+      // For all other events
       await handleAuthUserChange(session?.user ?? null, event === 'INITIAL_SESSION');
-    });
+      clearTimeout(loadingTimeout);
+    } catch (error) {
+      console.error('Auth state change error:', error);
+      // Force loading to false on error
+      setLoadingAuth(false);
+      clearTimeout(loadingTimeout);
+    }
+  });
 
-    return () => {
-      mounted = false;
-      authListener.subscription.unsubscribe();
-    };
-  }, [handleAuthUserChange, isResettingPassword]);
+  return () => {
+    mounted = false;
+    clearTimeout(loadingTimeout);
+    authListener.subscription.unsubscribe();
+  };
+}, [handleAuthUserChange, isResettingPassword]);
+
 
   useEffect(() => {
     if (currentUser?.organization_id) {
