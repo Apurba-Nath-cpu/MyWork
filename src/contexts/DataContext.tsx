@@ -28,6 +28,7 @@ interface DataContextType {
   updateTask: (updatedTask: Task) => Promise<void>;
   getCommentsForTask: (taskId: string) => Promise<Comment[]>;
   addComment: (taskId: string, content: string) => Promise<Comment | null>;
+  deleteComment: (commentId: string, taskId: string) => Promise<void>;
   
   showAddProjectModal: boolean;
   setShowAddProjectModal: (show: boolean) => void;
@@ -42,6 +43,8 @@ interface DataContextType {
   setEditingProject: (project: ProjectColumn | null) => void;
   editingTask: Task | null;
   setEditingTask: (task: Task | null) => void;
+  viewingTaskComments: Task | null;
+  setViewingTaskComments: (task: Task | null) => void;
 
   confirmationModalState: ConfirmationModalState;
   showConfirmationModal: (title: string, message: string, onConfirmAction: () => void, confirmText?: string, cancelText?: string) => void;
@@ -69,6 +72,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showManageAccessModal, setShowManageAccessModalState] = useState(false);
   const [editingProject, setEditingProjectState] = useState<ProjectColumn | null>(null);
   const [editingTask, setEditingTaskState] = useState<Task | null>(null);
+  const [viewingTaskComments, setViewingTaskCommentsState] = useState<Task | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
   const initialConfirmationState: ConfirmationModalState = {
@@ -395,6 +399,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newComment;
   }, [currentUser, toast]);
   
+  const deleteComment = useCallback(async (commentId: string, taskId: string) => {
+    const success = await supabaseService.deleteComment(commentId);
+    if (success) {
+        setBoardData(prev => {
+            if (!prev) return null;
+            const newTasks = { ...prev.tasks };
+            if (newTasks[taskId]) {
+                newTasks[taskId] = {
+                    ...newTasks[taskId],
+                    commentCount: Math.max(0, (newTasks[taskId].commentCount || 1) - 1),
+                };
+            }
+            return { ...prev, tasks: newTasks };
+        });
+    } else {
+        toast({ title: "Error", description: "Failed to delete comment. You may not have permission.", variant: "destructive" });
+    }
+  }, [toast]);
+  
   const setShowAddProjectModal = useCallback((show: boolean) => setShowAddProjectModalState(show), []);
   const setShowAddTaskModalForProject = useCallback((projectId: string | null) => {
     setShowAddTaskModalForProjectState(projectId);
@@ -403,14 +426,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const setShowManageAccessModal = useCallback((show: boolean) => setShowManageAccessModalState(show), []);
   const setEditingProject = useCallback((project: ProjectColumn | null) => setEditingProjectState(project), []);
   const setEditingTask = useCallback((task: Task | null) => setEditingTaskState(task), []);
+  const setViewingTaskComments = useCallback((task: Task | null) => {
+    setViewingTaskCommentsState(task);
+  }, []);
 
   return (
     <DataContext.Provider value={{
       boardData, usersForSuggestions, fetchBoardData, addProject, updateProject, addTask,
       moveProject, moveTaskWithinProject, moveTaskBetweenProjects, updateTask, getCommentsForTask, addComment,
+      deleteComment,
       showAddProjectModal, setShowAddProjectModal, showAddTaskModalForProject, setShowAddTaskModalForProject,
       showCreateUserModal, setShowCreateUserModal, showManageAccessModal, setShowManageAccessModal,
       editingProject, setEditingProject, editingTask, setEditingTask,
+      viewingTaskComments, setViewingTaskComments,
       confirmationModalState, showConfirmationModal, hideConfirmationModal, handleConfirmDeletion,
       requestProjectDeletion, requestTaskDeletion,
       searchTerm, setSearchTerm

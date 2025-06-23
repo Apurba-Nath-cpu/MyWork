@@ -125,3 +125,56 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   fetchPublicUsers: (organizationId: string) => Promise<void>; 
 }
+
+
+export interface DataContextType {
+  boardData: BoardData | null;
+  usersForSuggestions: Array<Pick<User, 'id' | 'name' | 'role'>>;
+  fetchBoardData: () => Promise<void>;
+  addProject: (title: string) => Promise<void>;
+  updateProject: (updatedProject: Omit<ProjectColumn, 'taskIds'>) => Promise<void>;
+  addTask: (
+    projectId: string, 
+    title: string, 
+    description: string | undefined, 
+    assigneeIds: string[], 
+    eta: string | undefined,
+    status: TaskStatus,
+    priority: TaskPriority,
+    tags: string[]
+  ) => Promise<void>;
+  moveProject: (projectId: string, newIndex: number) => Promise<void>;
+  moveTaskWithinProject: (projectId: string, taskId: string, newIndex: number) => Promise<void>;
+  moveTaskBetweenProjects: (startProjectId: string, finishProjectId: string, taskId: string, newIndex: number) => Promise<void>;
+  updateTask: (updatedTask: Task) => Promise<void>;
+  getCommentsForTask: (taskId: string) => Promise<Comment[]>;
+  addComment: (taskId: string, content: string) => Promise<Comment | null>;
+  deleteComment: (commentId: string, taskId: string) => Promise<void>;
+  
+  showAddProjectModal: boolean;
+  setShowAddProjectModal: (show: boolean) => void;
+  showAddTaskModalForProject: string | null; // projectId or null
+  setShowAddTaskModalForProject: (projectId: string | null) => void;
+  showCreateUserModal: boolean;
+  setShowCreateUserModal: (show: boolean) => void;
+  showManageAccessModal: boolean;
+  setShowManageAccessModal: (show: boolean) => void;
+
+  editingProject: ProjectColumn | null;
+  setEditingProject: (project: ProjectColumn | null) => void;
+  editingTask: Task | null;
+  setEditingTask: (task: Task | null) => void;
+  viewingTaskComments: Task | null;
+  setViewingTaskComments: (task: Task | null) => void;
+
+  confirmationModalState: ConfirmationModalState;
+  showConfirmationModal: (title: string, message: string, onConfirmAction: () => void, confirmText?: string, cancelText?: string) => void;
+  hideConfirmationModal: () => void;
+  handleConfirmDeletion: () => void; 
+
+  requestProjectDeletion: (projectId: string) => void;
+  requestTaskDeletion: (taskId: string, projectId: string) => void;
+
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+}

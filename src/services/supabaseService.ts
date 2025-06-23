@@ -720,3 +720,12 @@ export const addComment = async (taskId: string, userId: string, content: string
     }
   };
 };
+
+export const deleteComment = async (commentId: string): Promise<boolean> => {
+  if (!supabase) return false;
+  const { error } = await supabase.from('comments').delete().eq('id', commentId);
+  if (error) {
+    return false;
+  }
+  return true;
+};

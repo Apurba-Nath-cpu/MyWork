@@ -49,7 +49,7 @@ const getPriorityClasses = (priority: TaskPriority): string => {
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   const { users, currentUser } = useAuth(); 
-  const { requestTaskDeletion, setEditingTask } = useData();
+  const { requestTaskDeletion, setEditingTask, setViewingTaskComments } = useData();
 
   const getAssigneeName = (userId: string) => users.find(u => u.id === userId)?.name || 'Unknown';
   
@@ -65,10 +65,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
   };
 
   const handleEdit = () => {
-    // Note: The modal itself enforces editing permissions for saving, 
-    // but we can allow anyone who can see the task to open the modal to view details and comments.
     setEditingTask(task);
   };
+  
+  const handleViewComments = () => {
+    setViewingTaskComments(task);
+  }
 
   return (
     <Draggable 
@@ -134,7 +136,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
             </div>
             
             <button 
-              onClick={(e) => { e.stopPropagation(); handleEdit(); }} 
+              onClick={(e) => { e.stopPropagation(); handleViewComments(); }} 
               className="flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md"
               title="View comments"
               aria-label={`View comments for task ${task.title}`}

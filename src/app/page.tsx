@@ -18,6 +18,7 @@ import EditTaskModal from '../components/EditTaskModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuthScreen from '../components/AuthScreen';
 import ManageUserAccessModal from '../components/ManageUserAccessModal';
+import CommentsModal from '../components/CommentsModal';
 
 
 const HomePage: React.FC = () => {
@@ -35,6 +36,8 @@ const HomePage: React.FC = () => {
     showManageAccessModal,
     editingProject,
     editingTask,
+    viewingTaskComments,
+    setViewingTaskComments,
     confirmationModalState,
     hideConfirmationModal,
     handleConfirmDeletion,
@@ -247,6 +250,7 @@ const HomePage: React.FC = () => {
       {showManageAccessModal && <ManageUserAccessModal />}
       {editingProject && <EditProjectModal project={editingProject} />}
       {editingTask && <EditTaskModal task={editingTask} />}
+      {viewingTaskComments && <CommentsModal task={viewingTaskComments} onClose={() => setViewingTaskComments(null)} />}
       {confirmationModalState.isOpen && (
         <ConfirmationModal
           isOpen={confirmationModalState.isOpen}
