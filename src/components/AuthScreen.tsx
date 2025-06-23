@@ -50,7 +50,7 @@ const PasswordResetForm: React.FC<PasswordResetFormProps> = memo(({
     <div className="p-6 sm:p-8">
       <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Reset Your Password</h2>
       <p className={`text-center text-sm mb-4 ${theme === 'dark' ? 'text-neutral-300' : 'text-neutral-600'}`}>
-        You have successfully verified your email. Please enter a new password below.
+        Please enter a new password below.
       </p>
       {resetError && <p className={errorBoxClass}>{resetError}</p>}
       <form onSubmit={handleResetPassword} className="space-y-4 sm:space-y-5">
@@ -225,7 +225,7 @@ AuthForms.displayName = 'AuthForms';
 
 
 const AuthScreen: React.FC = () => {
-  const { login, signUp, sendPasswordResetEmail, updatePassword } = useAuth(); 
+  const { login, signUp, sendPasswordResetEmail, updatePassword, isResettingPassword } = useAuth(); 
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
@@ -263,29 +263,11 @@ const AuthScreen: React.FC = () => {
   const [signupLoading, setSignupLoading] = useState(false);
 
   // Password Reset State
-  const [isResetMode, setIsResetMode] = useState(false);
   const [resetPassword, setResetPassword] = useState('');
   const [confirmResetPassword, setConfirmResetPassword] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
-
-  // Effect to detect when user arrives from a password reset link
-  useEffect(() => {
-    const { data: authListener } = supabaseService.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setIsResetMode(true);
-        // Clear other form states for a clean UI
-        setActiveTab('login'); 
-        setLoginError(null);
-        setSignupError(null);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
+  
   const validateEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleLogin = async (e: FormEvent) => {
@@ -407,7 +389,8 @@ const AuthScreen: React.FC = () => {
     setResetLoading(true);
     const result = await updatePassword(resetPassword);
     if (result.success) {
-      setIsResetMode(false); // Go back to login screen
+      // The context will handle setting isResettingPassword to false
+      // and logging the user out. The UI will update automatically.
       setResetPassword('');
       setConfirmResetPassword('');
     } else {
@@ -443,7 +426,7 @@ const AuthScreen: React.FC = () => {
       </div>
 
       <div className={currentCardClass}>
-        {isResetMode ? <PasswordResetForm 
+        {isResettingPassword ? <PasswordResetForm 
             theme={theme}
             resetError={resetError}
             resetPassword={resetPassword}

@@ -122,6 +122,8 @@ export interface AuthContextType {
   supabaseUser: SupabaseAuthUser | null;
   users: User[]; 
   loadingAuth: boolean;
+  isResettingPassword: boolean;
+  setIsResettingPassword: (isResetting: boolean) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }>;
   logout: () => Promise<void>;

@@ -14,6 +14,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [supabaseUser, setSupabaseUser] = useState<SupabaseAuthUser | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const { toast } = useToast();
 
   const fetchPublicUsers = useCallback(async (organizationId: string) => {
@@ -66,53 +67,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     setLoadingAuth(false);
   }, [fetchUserProfileWithTimeout]);
-
+  
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     let mounted = true;
-    let authListenerData: { data: { subscription: { unsubscribe: () => void } } } | null = null;
-
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabaseService.getSession(3, 100, 5000);
-        
-        if (mounted) {
-          if (session?.user) {
-            await handleAuthUserChange(session.user, true);
-          } else {
-            setLoadingAuth(false);
-          }
-        }
-
-        if (mounted) {
-          authListenerData = supabaseService.onAuthStateChange(async (event, session) => {
-            if (event === 'INITIAL_SESSION') {
-              return;
-            }
-            if (mounted) {
-              // The PASSWORD_RECOVERY event will set a session, but we don't fetch a profile for it
-              // as the user needs to reset their password first. The AuthScreen handles this UI state.
-              if (event !== 'PASSWORD_RECOVERY') {
-                await handleAuthUserChange(session?.user ?? null, false);
-              }
-            }
-          });
-        }
-      } catch (error) {
-        if (mounted) {
-          setLoadingAuth(false);
-        }
+    const { data: authListener } = supabaseService.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResettingPassword(true);
+        setCurrentUser(null);
+        setSupabaseUser(session?.user ?? null);
+        setLoadingAuth(false);
+      } else {
+        // Any other event means we are not in password recovery mode.
+        setIsResettingPassword(false);
+        await handleAuthUserChange(session?.user ?? null, event === 'INITIAL_SESSION');
       }
-    };
-
-    initializeAuth();
+    });
 
     return () => {
       mounted = false;
-      if (authListenerData) {
-        authListenerData.data.subscription.unsubscribe();
-      }
+      authListener.subscription.unsubscribe();
     };
   }, [handleAuthUserChange]);
 
@@ -228,7 +205,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, fetchPublicUsers, sendPasswordResetEmail, updatePassword }}>
+    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, isResettingPassword, setIsResettingPassword, login, signUp, logout, fetchPublicUsers, sendPasswordResetEmail, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
