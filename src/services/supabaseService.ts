@@ -746,6 +746,7 @@ export const addComment = async (taskId: string, userId: string, content: string
     .single();
   
   if (error) {
+    console.error('Supabase add comment error:', error);
     return null;
   }
 
