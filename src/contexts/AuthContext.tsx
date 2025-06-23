@@ -189,16 +189,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const sendPasswordResetEmail = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     const { error } = await supabaseService.sendPasswordResetEmail(email);
 
+    if (error) {
+        toast({
+            title: "Password Reset Error",
+            description: error.message,
+            variant: "destructive"
+        });
+        console.error("Password reset error:", error.message);
+        return { success: false, error: error.message };
+    }
+
     toast({
         title: "Check Your Email",
         description: "If an account exists for that email, a password reset link has been sent.",
         variant: "default"
     });
-
-    if (error) {
-        console.error("Password reset error:", error.message);
-        return { success: false, error: error.message };
-    }
 
     return { success: true };
   }, [toast]);

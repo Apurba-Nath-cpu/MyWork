@@ -790,12 +790,30 @@ export const deleteComment = async (commentId: string): Promise<boolean> => {
 };
 
 export const sendPasswordResetEmail = async (email: string): Promise<{ error: SupabaseAuthError | null }> => {
-  if (!supabase) return { error: createNotConfiguredError('ConfigurationError') as SupabaseAuthError };
-  
-  const redirectTo = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+  if (!supabase) {
+    return { error: createNotConfiguredError('ConfigurationError') as SupabaseAuthError };
+  }
+
+  // The redirectTo URL must be the URL of your deployed application.
+  // It's crucial that NEXT_PUBLIC_SITE_URL is set in your environment variables.
+  const redirectTo = process.env.NEXT_PUBLIC_SITE_URL;
+
+  // If the URL is not set, we cannot proceed because Supabase needs a valid URL to redirect to.
+  // The email link will not work without it.
+  if (!redirectTo) {
+    console.error(
+      'FATAL: NEXT_PUBLIC_SITE_URL is not set in your environment variables. ' +
+      'Password reset emails cannot be sent without this.'
+    );
+    // Return an error to be displayed to the user.
+    return { error: {
+      name: 'Configuration Error',
+      message: 'The application is not configured for sending password reset emails. Please contact support.'
+    } as SupabaseAuthError };
+  }
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: redirectTo, 
+    redirectTo: redirectTo,
   });
   return { error };
 };
@@ -805,5 +823,3 @@ export const updateUserPassword = async (newPassword: string): Promise<{ error: 
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   return { error };
 };
-
-    
