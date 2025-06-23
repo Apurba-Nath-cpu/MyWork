@@ -18,19 +18,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { toast } = useToast();
     const router = useRouter();
 
-    useEffect(() => {
-      if (!supabaseService.supabase) {
-        console.error("Supabase client is not initialized. Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your environment.");
-        toast({
-          title: "Application Not Configured",
-          description: "The connection to the backend is not set up. Please check your environment variables.",
-          variant: "destructive",
-          duration: Infinity,
-        });
-        setLoadingAuth(false); // Unblock the UI
-      }
-    }, [toast]);
-
     const fetchPublicUsers = useCallback(async (organizationId: string) => {
         const publicUsers = await supabaseService.getUsers(organizationId);
         setUsers(publicUsers);
@@ -64,19 +51,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (userProfile) {
             setCurrentUser(userProfile);
             await fetchPublicUsers(userProfile.organization_id);
+            setLoadingAuth(false); // Set loading false ONLY on full success
         } else {
             toast({
                 title: "Login Error",
                 description: "Could not retrieve your user profile. Please try logging in again or contact support.",
                 variant: "destructive",
             });
-            await supabaseService.signOutUser(); // This will trigger the 'SIGNED_OUT' state in the listener
+            // This will trigger the 'SIGNED_OUT' event in the listener, which will then set loading to false.
+            await supabaseService.signOutUser(); 
         }
-        setLoadingAuth(false);
     }, [fetchUserProfile, fetchPublicUsers, toast]);
 
     useEffect(() => {
         if (!supabaseService.supabase) {
+            console.error("Supabase client is not initialized. Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your environment.");
+            toast({
+                title: "Application Not Configured",
+                description: "The connection to the backend is not set up. Please check your environment variables.",
+                variant: "destructive",
+                duration: Infinity,
+            });
+            setLoadingAuth(false); // Unblock the UI
             return;
         }
 
@@ -105,7 +101,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => {
             subscription?.unsubscribe();
         };
-    }, [handleSession]);
+    }, [handleSession, toast]);
 
     const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         const { success, error } = await supabaseService.signInUser(email, password);
