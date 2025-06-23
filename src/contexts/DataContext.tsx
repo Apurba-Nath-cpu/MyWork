@@ -382,7 +382,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addComment = useCallback(async (taskId: string, content: string, mentionedUserIds: string[]): Promise<Comment | null> => {
     if (!currentUser) return null;
-    const newComment = await supabaseService.addComment(taskId, currentUser.id, content, mentionedUserIds);
+    const newComment = await supabaseService.addComment(taskId, content, mentionedUserIds);
     if (newComment) {
       // Optimistically update the comment count on the board
       setBoardData(prev => {

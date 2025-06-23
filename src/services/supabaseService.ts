@@ -725,16 +725,27 @@ export const getCommentsForTask = async (taskId: string): Promise<Comment[]> => 
   }));
 };
 
-export const addComment = async (taskId: string, userId: string, content: string, mentionedUserIds: string[]): Promise<Comment | null> => {
+export const addComment = async (taskId: string, content: string, mentionedUserIds: string[]): Promise<Comment | null> => {
   if (!supabase) return null;
-  const { data, error } = await supabase
+
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('add_comment_with_permission_check', {
+      p_task_id: taskId,
+      p_content: content,
+      p_mentioned_user_ids: mentionedUserIds.length > 0 ? mentionedUserIds : []
+    });
+
+  if (rpcError) {
+    console.error('Supabase add comment RPC error:', rpcError);
+    return null;
+  }
+  
+  if (!rpcData) return null;
+  
+  const newCommentId = rpcData.id;
+
+  const { data: fullCommentData, error: fetchError } = await supabase
     .from('comments')
-    .insert({
-      task_id: taskId,
-      user_id: userId,
-      content,
-      mentioned_user_ids: mentionedUserIds.length > 0 ? mentionedUserIds : null,
-    })
     .select(`
       id,
       content,
@@ -743,15 +754,16 @@ export const addComment = async (taskId: string, userId: string, content: string
       mentioned_user_ids,
       users ( id, name, avatar_url, role )
     `)
+    .eq('id', newCommentId)
     .single();
-  
-  if (error) {
-    console.error('Supabase add comment error:', error);
+
+  if(fetchError) {
+    console.error('Supabase add comment error: could not fetch the new comment with user details', fetchError);
     return null;
   }
-
+  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const c = data as any;
+  const c = fullCommentData as any;
   return {
     id: c.id,
     content: c.content,
