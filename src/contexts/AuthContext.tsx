@@ -1,4 +1,3 @@
-
 "use client";
 import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -45,63 +44,120 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
     
     const handleSession = useCallback(async (session: Session) => {
-        setSupabaseUser(session.user);
-        const userProfile = await fetchUserProfile(session.user.id);
+        try {
+            setSupabaseUser(session.user);
+            const userProfile = await fetchUserProfile(session.user.id);
 
-        if (userProfile) {
-            setCurrentUser(userProfile);
-            await fetchPublicUsers(userProfile.organization_id);
-            setLoadingAuth(false); // Set loading false ONLY on full success
-        } else {
+            if (userProfile) {
+                setCurrentUser(userProfile);
+                await fetchPublicUsers(userProfile.organization_id);
+                setLoadingAuth(false); // Set loading false ONLY on full success
+            } else {
+                toast({
+                    title: "Login Error",
+                    description: "Could not retrieve your user profile. Please try logging in again or contact support.",
+                    variant: "destructive",
+                });
+                // Ensure loading is set to false even if signOut fails
+                setLoadingAuth(false);
+                await supabaseService.signOutUser(); 
+            }
+        } catch (error) {
+            console.error("Error in handleSession:", error);
+            setLoadingAuth(false);
             toast({
-                title: "Login Error",
-                description: "Could not retrieve your user profile. Please try logging in again or contact support.",
+                title: "Authentication Error",
+                description: "An unexpected error occurred during authentication.",
                 variant: "destructive",
             });
-            // This will trigger the 'SIGNED_OUT' event in the listener, which will then set loading to false.
-            await supabaseService.signOutUser(); 
         }
     }, [fetchUserProfile, fetchPublicUsers, toast]);
 
     useEffect(() => {
-        if (!supabaseService.supabase) {
-            console.error("Supabase client is not initialized. Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your environment.");
-            toast({
-                title: "Application Not Configured",
-                description: "The connection to the backend is not set up. Please check your environment variables.",
-                variant: "destructive",
-                duration: Infinity,
-            });
-            setLoadingAuth(false); // Unblock the UI
-            return;
-        }
+        let mounted = true;
+        let authSubscription: { unsubscribe: () => void } | null = null;
 
-        const { data: { subscription } } = supabaseService.onAuthStateChange(async (event, session) => {
-            if (event === 'PASSWORD_RECOVERY') {
-                setIsResettingPassword(true);
-                setLoadingAuth(false);
+        const initializeAuth = async () => {
+            if (!supabaseService.supabase) {
+                console.error("Supabase client is not initialized. Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your environment.");
+                toast({
+                    title: "Application Not Configured",
+                    description: "The connection to the backend is not set up. Please check your environment variables.",
+                    variant: "destructive",
+                    duration: Infinity,
+                });
+                if (mounted) setLoadingAuth(false);
                 return;
             }
 
-            if (event === 'SIGNED_IN') {
-                setIsResettingPassword(false);
+            try {
+                // Get initial session
+                const { data: { session }, error } = await supabaseService.supabase.auth.getSession();
+                
+                if (error) {
+                    console.error("Error getting initial session:", error);
+                    if (mounted) setLoadingAuth(false);
+                    return;
+                }
+
+                // Handle initial session if it exists
+                if (session && mounted) {
+                    await handleSession(session);
+                } else if (mounted) {
+                    setLoadingAuth(false);
+                }
+
+                // Set up auth state listener
+                const { data: { subscription } } = supabaseService.onAuthStateChange(async (event, session) => {
+                    if (!mounted) return;
+
+                    console.log("Auth state change:", event, !!session);
+
+                    if (event === 'PASSWORD_RECOVERY') {
+                        setIsResettingPassword(true);
+                        setLoadingAuth(false);
+                        return;
+                    }
+
+                    if (event === 'SIGNED_IN') {
+                        setIsResettingPassword(false);
+                    }
+                    
+                    if (session) {
+                        await handleSession(session);
+                    } else {
+                        setCurrentUser(null);
+                        setSupabaseUser(null);
+                        setUsers([]);
+                        setIsResettingPassword(false);
+                        setLoadingAuth(false);
+                    }
+                });
+
+                authSubscription = subscription;
+
+            } catch (error) {
+                console.error("Error initializing auth:", error);
+                if (mounted) setLoadingAuth(false);
             }
-            
-            if (session) {
-                await handleSession(session);
-            } else {
-                setCurrentUser(null);
-                setSupabaseUser(null);
-                setUsers([]);
-                setIsResettingPassword(false);
+        };
+
+        // Add a timeout as a safety net
+        const timeoutId = setTimeout(() => {
+            if (mounted && loadingAuth) {
+                console.warn("Auth initialization timed out, setting loadingAuth to false");
                 setLoadingAuth(false);
             }
-        });
+        }, 10000); // 10 second timeout
+
+        initializeAuth();
 
         return () => {
-            subscription?.unsubscribe();
+            mounted = false;
+            clearTimeout(timeoutId);
+            authSubscription?.unsubscribe();
         };
-    }, [handleSession, toast]);
+    }, []); // Remove handleSession and toast from dependencies to prevent re-initialization
 
     const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         const { success, error } = await supabaseService.signInUser(email, password);

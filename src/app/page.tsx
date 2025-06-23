@@ -275,7 +275,7 @@ const HomePage: React.FC = () => {
                         const tasks: Task[] = project.taskIds
                           .map(
                             (taskId: string): Task | undefined =>
-                              boardData.tasks[taskId]
+                              boardData?.tasks[taskId]
                           ) // Use original boardData for full task info
                           .filter((task?: Task): task is Task => !!task);
 
