@@ -125,7 +125,8 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, name: string, organizationName: string, avatarFile?: File) => Promise<{ success: boolean; error?: string; isOrgNameConflict?: boolean; isEmailConflict?: boolean }>;
   logout: () => Promise<void>;
-  fetchPublicUsers: (organizationId: string) => Promise<void>; 
+  fetchPublicUsers: (organizationId: string) => Promise<void>;
+  sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 

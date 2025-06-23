@@ -11,7 +11,7 @@ import { SunIcon, MoonIcon } from './custom-icons';
 type AuthTab = 'login' | 'signup';
 
 const AuthScreen: React.FC = () => {
-  const { login, signUp } = useAuth(); 
+  const { login, signUp, sendPasswordResetEmail } = useAuth(); 
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
@@ -145,6 +145,30 @@ const AuthScreen: React.FC = () => {
       setSignupAvatarPreview(null);
     }
   };
+
+  const handleForgotPassword = async () => {
+    setLoginError(null);
+    const emailToReset = loginEmail || window.prompt("Please enter your email address to receive a password reset link.");
+    
+    if (!emailToReset) {
+        return; // User cancelled or field was empty
+    }
+
+    if (!validateEmail(emailToReset)) {
+        const errorMsg = "Please enter a valid email address.";
+        setLoginError(errorMsg);
+        toast({
+            title: "Invalid Email",
+            description: errorMsg,
+            variant: "destructive"
+        });
+        return;
+    }
+
+    setLoginLoading(true);
+    await sendPasswordResetEmail(emailToReset);
+    setLoginLoading(false);
+  };
   
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'dark bg-neutral-900' : 'bg-neutral-50'} transition-colors duration-300 relative`}>
@@ -201,6 +225,19 @@ const AuthScreen: React.FC = () => {
                 <div>
                   <label htmlFor="loginPassword" className={currentLabelClass}>Password</label>
                   <input type="password" id="loginPassword" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="••••••••" aria-required="true" />
+                </div>
+                <div className="text-right -mt-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className={`text-xs sm:text-sm font-medium transition-colors ${
+                      theme === 'dark'
+                        ? 'text-primary-400 hover:text-primary-300'
+                        : 'text-primary-600 hover:text-primary-700'
+                    } focus:outline-none focus:underline`}
+                  >
+                    Forgot Password?
+                  </button>
                 </div>
                 <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={loginLoading}>
                   {loginLoading ? 'Logging in...' : 'Login'}

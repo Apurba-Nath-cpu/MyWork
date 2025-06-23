@@ -775,3 +775,13 @@ export const deleteComment = async (commentId: string): Promise<boolean> => {
   }
   return true;
 };
+
+export const sendPasswordResetEmail = async (email: string): Promise<{ error: SupabaseAuthError | null }> => {
+  if (!supabase) return { error: createNotConfiguredError('ConfigurationError') as SupabaseAuthError };
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    // Redirect URL can be configured in Supabase Auth settings
+    // For this app, the user will be redirected to the root where they can log in again.
+    redirectTo: window.location.origin, 
+  });
+  return { error };
+};

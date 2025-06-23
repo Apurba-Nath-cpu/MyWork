@@ -191,8 +191,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [toast]);
 
+  const sendPasswordResetEmail = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await supabaseService.sendPasswordResetEmail(email);
+
+    // Always show a generic success message to prevent email enumeration attacks
+    toast({
+        title: "Check Your Email",
+        description: "If an account exists for that email, a password reset link has been sent.",
+        variant: "default"
+    });
+
+    if (error) {
+        // Log the error for debugging but don't expose specifics to the user in production
+        console.error("Password reset error:", error.message);
+        // We can still return the error for internal logic, but the user sees a generic message.
+        return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  }, [toast]);
+
   return (
-    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, fetchPublicUsers }}>
+    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, fetchPublicUsers, sendPasswordResetEmail }}>
       {children}
     </AuthContext.Provider>
   );
