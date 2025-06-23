@@ -83,6 +83,7 @@ export interface BoardData {
   tasks: Record<string, Task>;
   projects: Record<string, ProjectColumn>;
   projectOrder: string[]; // Ordered list of project IDs
+  mentionedTaskIds?: Set<string>;
 }
 
 export interface UserCreationData {
@@ -178,4 +179,7 @@ export interface DataContextType {
 
   searchTerm: string;
   setSearchTerm: (term: string) => void;
+
+  isFocusMode: boolean;
+  setIsFocusMode: (isOn: boolean) => void;
 }

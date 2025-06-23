@@ -43,6 +43,7 @@ const HomePage: React.FC = () => {
     hideConfirmationModal,
     handleConfirmDeletion,
     searchTerm,
+    isFocusMode,
   } = useData();
 
   useEffect(() => {
@@ -52,46 +53,80 @@ const HomePage: React.FC = () => {
   }, [currentUser, loadingAuth, fetchBoardData]);
   
   const filteredBoardData = useMemo(() => {
-    if (!boardData) return null;
-    if (!searchTerm) return boardData;
+    if (!boardData || !currentUser) return null;
 
-    const lowercasedTerm = searchTerm.toLowerCase();
+    // 1. Apply Focus Mode filter if active
+    let baseData = boardData;
+    if (isFocusMode) {
+      const focusedProjects: Record<string, ProjectColumn> = {};
+      const focusedProjectOrder: string[] = [];
 
-    const filteredProjects: Record<string, ProjectColumn> = {};
-    const filteredProjectOrder: string[] = [];
-
-    boardData.projectOrder.forEach(projectId => {
+      boardData.projectOrder.forEach(projectId => {
         const project = boardData.projects[projectId];
         if (!project) return;
-        
-        const projectTitleMatches = project.title.toLowerCase().includes(lowercasedTerm);
-        
-        const matchingTasksInProject = project.taskIds.filter(taskId => {
-            const task = boardData.tasks[taskId];
-            return task && task.title.toLowerCase().includes(lowercasedTerm);
+
+        const relevantTaskIds = project.taskIds.filter(taskId => {
+          const task = boardData.tasks[taskId];
+          if (!task) return false;
+
+          const isAssigned = task.assigneeIds.includes(currentUser.id);
+          const isMentioned = boardData.mentionedTaskIds?.has(taskId) ?? false;
+          return isAssigned || isMentioned;
         });
 
-        if (projectTitleMatches) {
-            // If project title matches, include it and all its tasks
-            filteredProjects[project.id] = { ...project }; 
-            filteredProjectOrder.push(project.id);
-        } else if (matchingTasksInProject.length > 0) {
-            // If only tasks match, add project but with only matching tasks
-            filteredProjects[project.id] = {
-                ...project,
-                taskIds: matchingTasksInProject,
-            };
-            filteredProjectOrder.push(project.id);
+        if (relevantTaskIds.length > 0) {
+          focusedProjects[projectId] = {
+            ...project,
+            taskIds: relevantTaskIds,
+          };
+          focusedProjectOrder.push(projectId);
         }
+      });
+      
+      baseData = {
+        ...boardData,
+        projects: focusedProjects,
+        projectOrder: focusedProjectOrder,
+      };
+    }
+
+    // 2. Apply Search Term filter on top of the (potentially focused) data
+    if (!searchTerm) return baseData;
+    
+    const lowercasedTerm = searchTerm.toLowerCase();
+    const searchedProjects: Record<string, ProjectColumn> = {};
+    const searchedProjectOrder: string[] = [];
+
+    baseData.projectOrder.forEach(projectId => {
+      const project = baseData.projects[projectId];
+      if (!project) return;
+      
+      const projectTitleMatches = project.title.toLowerCase().includes(lowercasedTerm);
+      
+      const matchingTasksInProject = project.taskIds.filter(taskId => {
+        const task = baseData.tasks[taskId];
+        return task && task.title.toLowerCase().includes(lowercasedTerm);
+      });
+
+      if (projectTitleMatches) {
+        searchedProjects[project.id] = { ...project }; 
+        searchedProjectOrder.push(project.id);
+      } else if (matchingTasksInProject.length > 0) {
+        searchedProjects[project.id] = {
+          ...project,
+          taskIds: matchingTasksInProject,
+        };
+        searchedProjectOrder.push(project.id);
+      }
     });
     
     return {
-        tasks: boardData.tasks,
-        projects: filteredProjects,
-        projectOrder: filteredProjectOrder,
+      ...baseData,
+      projects: searchedProjects,
+      projectOrder: searchedProjectOrder,
     };
 
-  }, [boardData, searchTerm]);
+  }, [boardData, currentUser, isFocusMode, searchTerm]);
 
 
   const onDragEnd = useCallback((result: DropResult) => {
@@ -181,7 +216,7 @@ const HomePage: React.FC = () => {
   }
 
   const noProjectsExist = boardData && boardData.projectOrder.length === 0;
-  const showNoResults = boardData && boardData.projectOrder.length > 0 && filteredBoardData.projectOrder.length === 0;
+  const hasProjectsButNoneMatch = boardData && boardData.projectOrder.length > 0 && filteredBoardData.projectOrder.length === 0;
 
   return (
     <div className={`flex flex-col h-screen font-sans ${theme} bg-background text-foreground`}>
@@ -199,11 +234,17 @@ const HomePage: React.FC = () => {
               )}
             </div>
           </div>
-        ) : showNoResults ? (
+        ) : hasProjectsButNoneMatch ? (
           <div className="flex-grow flex items-center justify-center">
             <div className="text-center text-neutral-500 dark:text-neutral-400">
-              <h3 className="text-lg font-semibold">No results found</h3>
-              <p>Try adjusting your search term.</p>
+              <h3 className="text-lg font-semibold">
+                {isFocusMode && !searchTerm ? "No Tasks in Focus" : "No Results Found"}
+              </h3>
+              <p>
+                {isFocusMode && !searchTerm
+                  ? "You have no assigned tasks or mentions."
+                  : "Try adjusting your search term or turning off Focus Mode."}
+              </p>
             </div>
           </div>
         ) : (

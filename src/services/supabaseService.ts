@@ -417,42 +417,49 @@ export const getUsers = async (organizationId: string): Promise<User[]> => {
   }));
 };
 
-export const getBoardData = async (organizationId: string): Promise<BoardData> => {
-  if (!supabase) return { tasks: {}, projects: {}, projectOrder: [] };
-  const { data: projectsData, error: projectsError } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .order('order_index');
-
-  if (projectsError) {
-    throw projectsError;
+export const getBoardData = async (organizationId: string, userId: string): Promise<BoardData> => {
+  if (!supabase) return { tasks: {}, projects: {}, projectOrder: [], mentionedTaskIds: new Set() };
+  
+  // Fetch projects, tasks, and mentions in parallel
+  const [projectsResult, tasksResult, mentionedResult] = await Promise.all([
+    supabase
+      .from('projects')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('order_index'),
+    supabase
+      .from('tasks_with_comment_count')
+      .select('*')
+      .in('project_id', 
+        (await supabase.from('projects').select('id').eq('organization_id', organizationId)).data?.map(p => p.id) || []
+      )
+      .order('project_id') 
+      .order('order_index'),
+    supabase
+      .from('comments')
+      .select('task_id')
+      .contains('mentioned_user_ids', [userId])
+  ]);
+  
+  const { data: projectsData, error: projectsError } = projectsResult;
+  if (projectsError) throw projectsError;
+  
+  const { data: tasksData, error: tasksError } = tasksResult;
+  if (tasksError) throw tasksError;
+  
+  const { data: mentionedData, error: mentionedError } = mentionedResult;
+  if (mentionedError) {
+    // Fail gracefully on mentions
+    console.error("Failed to fetch mentioned task IDs:", mentionedError);
   }
 
-  const projectIds = (projectsData || []).map(p => p.id);
-  let tasksData: any[] = []; 
-  let tasksError: SupabasePostgrestError | null = null;
-
-  if (projectIds.length > 0) {
-      // Use the view to get comment counts
-      const { data, error } = await supabase
-        .from('tasks_with_comment_count')
-        .select('*') 
-        .in('project_id', projectIds)
-        .order('project_id') 
-        .order('order_index');
-      tasksData = data || [];
-      tasksError = error;
-  }
-
-  if (tasksError) {
-    throw tasksError;
-  }
+  const mentionedTaskIds = new Set<string>((mentionedData || []).map(c => c.task_id));
 
   const boardData: BoardData = {
     projects: {},
     tasks: {},
     projectOrder: [],
+    mentionedTaskIds: mentionedTaskIds
   };
 
   (projectsData || []).forEach(project => {

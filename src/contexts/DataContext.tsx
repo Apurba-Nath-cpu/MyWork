@@ -56,6 +56,8 @@ interface DataContextType {
 
   searchTerm: string;
   setSearchTerm: (term: string) => void;
+  isFocusMode: boolean;
+  setIsFocusMode: (isOn: boolean) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -74,6 +76,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [editingTask, setEditingTaskState] = useState<Task | null>(null);
   const [viewingTaskComments, setViewingTaskCommentsState] = useState<Task | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isFocusMode, setIsFocusMode] = useState(false);
   
   const initialConfirmationState: ConfirmationModalState = {
     isOpen: false,
@@ -93,7 +96,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     try {
-      const data = await supabaseService.getBoardData(currentUser.organization_id);
+      const data = await supabaseService.getBoardData(currentUser.organization_id, currentUser.id);
       setBoardData(data);
     } catch (error) {
       toast({ title: "Error", description: "Failed to load board data for your organization.", variant: "destructive" });
@@ -441,7 +444,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       viewingTaskComments, setViewingTaskComments,
       confirmationModalState, showConfirmationModal, hideConfirmationModal, handleConfirmDeletion,
       requestProjectDeletion, requestTaskDeletion,
-      searchTerm, setSearchTerm
+      searchTerm, setSearchTerm,
+      isFocusMode, setIsFocusMode,
     }}>
       {children}
     </DataContext.Provider>

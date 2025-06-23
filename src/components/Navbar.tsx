@@ -8,6 +8,8 @@ import { UserRole } from '../types';
 import { SunIcon, MoonIcon, UserCircleIcon, LogoutIcon, PlusCircleIcon, UserPlusIcon, UserCogIcon, SearchIcon } from './custom-icons';
 import { APP_TITLE } from '../lib/constants';
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -17,7 +19,9 @@ const Navbar: React.FC = () => {
     setShowCreateUserModal, 
     setShowManageAccessModal,
     searchTerm,
-    setSearchTerm
+    setSearchTerm,
+    isFocusMode,
+    setIsFocusMode,
   } = useData();
 
   const canCreateProject = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.ORG_MAINTAINER;
@@ -28,14 +32,24 @@ const Navbar: React.FC = () => {
     <nav className="bg-neutral-200 dark:bg-neutral-800 p-4 shadow-md flex justify-between items-center flex-wrap gap-4">
       <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">{APP_TITLE}</h1>
       
-      <div className="relative flex-grow max-w-xl mx-auto">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-500 dark:text-neutral-400 pointer-events-none" />
-        <Input
-          placeholder="Search by project or task title..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 rounded-md bg-neutral-100 dark:bg-neutral-700 border-neutral-300 dark:border-neutral-600 focus:ring-primary-500"
-        />
+      <div className="flex-1 flex justify-center items-center gap-x-4 gap-y-2 flex-wrap">
+        <div className="relative flex-grow max-w-xl">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-500 dark:text-neutral-400 pointer-events-none" />
+          <Input
+            placeholder="Search by project or task title..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 rounded-md bg-neutral-100 dark:bg-neutral-700 border-neutral-300 dark:border-neutral-600 focus:ring-primary-500"
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+            <Label htmlFor="focus-mode-switch" className="text-sm font-medium whitespace-nowrap">Focus Mode</Label>
+            <Switch
+                id="focus-mode-switch"
+                checked={isFocusMode}
+                onCheckedChange={setIsFocusMode}
+            />
+        </div>
       </div>
 
       <div className="flex items-center space-x-2 sm:space-x-4">
