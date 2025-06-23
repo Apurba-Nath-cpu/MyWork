@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import type { DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import type { DropResult, ProjectColumn, Task } from '../types'; 
+import { UserRole } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext'; 
 import { useData } from '../contexts/DataContext';
@@ -191,7 +192,11 @@ const HomePage: React.FC = () => {
           <div className="flex-grow flex items-center justify-center">
             <div className="text-center text-neutral-500 dark:text-neutral-400">
               <h3 className="text-lg font-semibold">No Projects Yet</h3>
-              <p>Create your first project to get started.</p>
+              {currentUser && (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.ORG_MAINTAINER) ? (
+                  <p>Create your first project to get started.</p>
+              ) : (
+                  <p>No projects have been created yet. Please contact an administrator.</p>
+              )}
             </div>
           </div>
         ) : showNoResults ? (
