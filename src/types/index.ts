@@ -127,6 +127,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   fetchPublicUsers: (organizationId: string) => Promise<void>;
   sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 
@@ -184,3 +185,5 @@ export interface DataContextType {
   isFocusMode: boolean;
   setIsFocusMode: (isOn: boolean) => void;
 }
+
+    

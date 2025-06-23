@@ -6,7 +6,6 @@ import * as supabaseService from '../services/supabaseService';
 import type { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import type { SignUpError, CreateUserAccountError } from '../types'; 
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from 'next/router';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -26,7 +25,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []); 
 
-  // Centralized function to handle user profile fetching with timeout
   const fetchUserProfileWithTimeout = useCallback(async (userId: string, timeoutMs = 10000): Promise<User | null> => {
     try {
       const profilePromise = supabaseService.getUserProfile(userId);
@@ -41,14 +39,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  // Centralized function to handle auth user changes
   const handleAuthUserChange = useCallback(async (authUser: SupabaseAuthUser | null, isInitialLoad = false) => {
-    
     setSupabaseUser(authUser);
     
     if (authUser) {
       try {
-        // Add a small delay only for non-initial loads to ensure session is fully established
         if (!isInitialLoad) {
           await new Promise(res => setTimeout(res, 200));
         }
@@ -72,7 +67,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoadingAuth(false);
   }, [fetchUserProfileWithTimeout]);
 
-  // Single useEffect to handle all auth state
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -81,8 +75,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const initializeAuth = async () => {
       try {
-        
-        // Get initial session with a shorter timeout
         const { data: { session } } = await supabaseService.getSession(3, 100, 5000);
         
         if (mounted) {
@@ -93,17 +85,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         }
 
-        // Set up auth state listener
         if (mounted) {
           authListenerData = supabaseService.onAuthStateChange(async (event, session) => {
-            
-            // Skip INITIAL_SESSION as we handled it above
             if (event === 'INITIAL_SESSION') {
               return;
             }
-            
             if (mounted) {
-              await handleAuthUserChange(session?.user ?? null, false);
+              // The PASSWORD_RECOVERY event will set a session, but we don't fetch a profile for it
+              // as the user needs to reset their password first. The AuthScreen handles this UI state.
+              if (event !== 'PASSWORD_RECOVERY') {
+                await handleAuthUserChange(session?.user ?? null, false);
+              }
             }
           });
         }
@@ -124,7 +116,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [handleAuthUserChange]);
 
-  // This effect fetches the list of all users in the org *after* we know who the current user is.
   useEffect(() => {
     if (currentUser?.organization_id) {
       fetchPublicUsers(currentUser.organization_id);
@@ -154,7 +145,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: errorMessage, isOrgNameConflict: result.error?.isOrgNameConflict, isEmailConflict: result.error?.isEmailConflict };
     }
     
-    // After successful signup, immediately log the user in to create a session.
     const loginResult = await login(email, password);
 
     if (loginResult.success) {
@@ -164,14 +154,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return { success: true };
     } else {
-      // This is a fallback case. Signup worked but login failed, which is unusual.
-      // The user will need to confirm their email (if enabled) and log in manually.
       toast({
           title: "Sign Up Successful!",
           description: "Please check your email to confirm your account and then log in.",
           variant: "default",
       });
-      return { success: true }; // Signup was still a success.
+      return { success: true };
     }
   }, [login, toast]);
 
@@ -188,13 +176,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
         setLoadingAuth(false);
       }
+    } else {
+      // This handles the case where logout is successful, ensuring state is cleared.
+       setCurrentUser(null);
+       setUsers([]);
+       setSupabaseUser(null);
+       setLoadingAuth(false);
     }
   }, [toast]);
 
   const sendPasswordResetEmail = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     const { error } = await supabaseService.sendPasswordResetEmail(email);
 
-    // Always show a generic success message to prevent email enumeration attacks
     toast({
         title: "Check Your Email",
         description: "If an account exists for that email, a password reset link has been sent.",
@@ -202,17 +195,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (error) {
-        // Log the error for debugging but don't expose specifics to the user in production
         console.error("Password reset error:", error.message);
-        // We can still return the error for internal logic, but the user sees a generic message.
         return { success: false, error: error.message };
     }
 
     return { success: true };
   }, [toast]);
+  
+  const updatePassword = useCallback(async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await supabaseService.updateUserPassword(newPassword);
+    if (error) {
+      toast({
+        title: "Update Failed",
+        description: `There was an error updating your password: ${error.message}`,
+        variant: "destructive"
+      });
+      return { success: false, error: error.message };
+    }
+    
+    // After a successful password update, the user should be logged out
+    // of the recovery session and redirected to log in with their new password.
+    await logout();
+
+    toast({
+      title: "Password Updated",
+      description: "Your password has been successfully updated. Please log in with your new password.",
+      variant: "default"
+    });
+
+    return { success: true };
+  }, [toast, logout]);
+
 
   return (
-    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, fetchPublicUsers, sendPasswordResetEmail }}>
+    <AuthContext.Provider value={{ currentUser, supabaseUser, users, loadingAuth, login, signUp, logout, fetchPublicUsers, sendPasswordResetEmail, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
@@ -225,3 +241,5 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+    

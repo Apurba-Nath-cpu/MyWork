@@ -1,17 +1,18 @@
 
 "use client";
-import React, { useState, FormEvent, ChangeEvent } from 'react';
+import React, { useState, FormEvent, ChangeEvent, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types'; 
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { APP_TITLE } from '../lib/constants'; 
 import { useToast } from "@/hooks/use-toast";
 import { SunIcon, MoonIcon } from './custom-icons';
+import * as supabaseService from '../services/supabaseService';
 
 type AuthTab = 'login' | 'signup';
 
 const AuthScreen: React.FC = () => {
-  const { login, signUp, sendPasswordResetEmail } = useAuth(); 
+  const { login, signUp, sendPasswordResetEmail, updatePassword } = useAuth(); 
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
@@ -34,19 +35,43 @@ const AuthScreen: React.FC = () => {
   const activeTabClass = `${theme === 'dark' ? 'bg-neutral-700 text-primary-300' : 'bg-neutral-100 text-primary-600'} border-b-2 border-primary-500 dark:border-primary-400`;
   const inactiveTabClass = `${theme === 'dark' ? 'text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200' : 'text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700'}`;
 
+  // Login State
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
 
+  // Signup State
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupOrganizationName, setSignupOrganizationName] = useState(''); 
-  const [signupAvatarFile, setSignupAvatarFile] = useState<File | null>(null);
-  const [signupAvatarPreview, setSignupAvatarPreview] = useState<string | null>(null);
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupLoading, setSignupLoading] = useState(false);
+
+  // Password Reset State
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  // Effect to detect when user arrives from a password reset link
+  useEffect(() => {
+    const { data: authListener } = supabaseService.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResetMode(true);
+        // Clear other form states for a clean UI
+        setActiveTab('login'); 
+        setLoginError(null);
+        setSignupError(null);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   const validateEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -96,7 +121,7 @@ const AuthScreen: React.FC = () => {
       return;
     }
 
-    const result = await signUp(signupEmail, signupPassword, signupName, signupOrganizationName, signupAvatarFile || undefined);
+    const result = await signUp(signupEmail, signupPassword, signupName, signupOrganizationName);
     if (!result.success) {
       let errorMessage = result.error || "Sign up failed. Please try again.";
        if (result.isOrgNameConflict) {
@@ -115,35 +140,9 @@ const AuthScreen: React.FC = () => {
       setSignupEmail('');
       setSignupPassword('');
       setSignupOrganizationName('');
-      setSignupAvatarFile(null);
-      setSignupAvatarPreview(null);
       setSignupError(null); 
     }
     setSignupLoading(false);
-  };
-
-  const handleAvatarChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 2 * 1024 * 1024) { 
-        const errorMsg = "Avatar image must be less than 2MB.";
-        setSignupError(errorMsg);
-        setSignupAvatarFile(null);
-        setSignupAvatarPreview(null);
-        e.target.value = ''; 
-        return;
-      }
-      setSignupError(null); 
-      setSignupAvatarFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSignupAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSignupAvatarFile(null);
-      setSignupAvatarPreview(null);
-    }
   };
 
   const handleForgotPassword = async () => {
@@ -177,6 +176,137 @@ const AuthScreen: React.FC = () => {
     setLoginLoading(false);
   };
   
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    if (!resetPassword || !confirmResetPassword) {
+      setResetError("Both password fields are required.");
+      return;
+    }
+    if (resetPassword !== confirmResetPassword) {
+      setResetError("Passwords do not match.");
+      return;
+    }
+    if (resetPassword.length < 6) {
+      setResetError("Password must be at least 6 characters long.");
+      return;
+    }
+    setResetLoading(true);
+    const result = await updatePassword(resetPassword);
+    if (result.success) {
+      setIsResetMode(false); // Go back to login screen
+      setResetPassword('');
+      setConfirmResetPassword('');
+    } else {
+      setResetError(result.error || "Failed to reset password. Please try again.");
+    }
+    setResetLoading(false);
+  };
+
+  const PasswordResetForm = () => (
+    <div className="p-6 sm:p-8">
+      <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Reset Your Password</h2>
+      <p className={`text-center text-sm mb-4 ${theme === 'dark' ? 'text-neutral-300' : 'text-neutral-600'}`}>
+        You have successfully verified your email. Please enter a new password below.
+      </p>
+      {resetError && <p className={errorBoxClass}>{resetError}</p>}
+      <form onSubmit={handleResetPassword} className="space-y-4 sm:space-y-5">
+        <div>
+          <label htmlFor="resetPassword" className={currentLabelClass}>New Password</label>
+          <input type="password" id="resetPassword" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Min. 6 characters" aria-required="true" />
+        </div>
+        <div>
+          <label htmlFor="confirmResetPassword" className={currentLabelClass}>Confirm New Password</label>
+          <input type="password" id="confirmResetPassword" value={confirmResetPassword} onChange={(e) => setConfirmResetPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="••••••••" aria-required="true" />
+        </div>
+        <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={resetLoading}>
+          {resetLoading ? 'Updating Password...' : 'Update Password'}
+        </button>
+      </form>
+    </div>
+  );
+
+  const AuthForms = () => (
+    <>
+      <div className="flex">
+        <button 
+          onClick={() => { setActiveTab('login'); setSignupError(null); setLoginError(null);}}
+          className={`${tabButtonBaseClass} rounded-tl-xl ${activeTab === 'login' ? activeTabClass : inactiveTabClass}`}
+        >
+          Login
+        </button>
+        <button 
+          onClick={() => { setActiveTab('signup'); setLoginError(null); setSignupError(null);}}
+          className={`${tabButtonBaseClass} rounded-tr-xl ${activeTab === 'signup' ? activeTabClass : inactiveTabClass}`}
+        >
+          Create Organization
+        </button>
+      </div>
+      <div className="p-6 sm:p-8">
+        {activeTab === 'login' && (
+          <>
+            <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Welcome Back!</h2>
+            {loginError && <p className={errorBoxClass}>{loginError}</p>}
+            <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
+              <div>
+                <label htmlFor="loginEmail" className={currentLabelClass}>Email Address</label>
+                <input type="email" id="loginEmail" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="you@example.com" aria-required="true" />
+              </div>
+              <div>
+                <label htmlFor="loginPassword" className={currentLabelClass}>Password</label>
+                <input type="password" id="loginPassword" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="••••••••" aria-required="true" />
+              </div>
+              <div className="text-right -mt-2 mb-4">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className={`text-xs sm:text-sm font-medium transition-colors ${
+                    theme === 'dark'
+                      ? 'text-primary-400 hover:text-primary-300'
+                      : 'text-primary-600 hover:text-primary-700'
+                  } focus:outline-none focus:underline`}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={loginLoading}>
+                {loginLoading ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {activeTab === 'signup' && (
+          <>
+            <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Create Admin Account & Organization</h2>
+            {signupError && <p className={errorBoxClass}>{signupError}</p>}
+            <form onSubmit={handleSignup} className="space-y-4 sm:space-y-5">
+              <div>
+                <label htmlFor="signupName" className={currentLabelClass}>Your Full Name (Admin)</label>
+                <input type="text" id="signupName" value={signupName} onChange={(e) => setSignupName(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Your Name" aria-required="true" />
+              </div>
+              <div>
+                <label htmlFor="signupOrganizationName" className={currentLabelClass}>Organization Name</label>
+                <input type="text" id="signupOrganizationName" value={signupOrganizationName} onChange={(e) => setSignupOrganizationName(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Your Company or Team Name" aria-required="true" />
+              </div>
+              <div>
+                <label htmlFor="signupEmail" className={currentLabelClass}>Your Email Address (Admin)</label>
+                <input type="email" id="signupEmail" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="you@example.com" aria-required="true" />
+              </div>
+              <div>
+                <label htmlFor="signupPassword" className={currentLabelClass}>Password (Admin)</label>
+                <input type="password" id="signupPassword" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Min. 6 characters" aria-required="true" />
+              </div>
+              <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={signupLoading}>
+                {signupLoading ? 'Creating Account...' : 'Create Account & Organization'}
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'dark bg-neutral-900' : 'bg-neutral-50'} transition-colors duration-300 relative`}>
       <div className="absolute top-4 right-4 z-10">
@@ -204,89 +334,9 @@ const AuthScreen: React.FC = () => {
       </div>
 
       <div className={currentCardClass}>
-        <div className="flex">
-          <button 
-            onClick={() => { setActiveTab('login'); setSignupError(null); setLoginError(null);}}
-            className={`${tabButtonBaseClass} rounded-tl-xl ${activeTab === 'login' ? activeTabClass : inactiveTabClass}`}
-          >
-            Login
-          </button>
-          <button 
-            onClick={() => { setActiveTab('signup'); setLoginError(null); setSignupError(null);}}
-            className={`${tabButtonBaseClass} rounded-tr-xl ${activeTab === 'signup' ? activeTabClass : inactiveTabClass}`}
-          >
-            Create Organization
-          </button>
-        </div>
-
-        <div className="p-6 sm:p-8">
-          {activeTab === 'login' && (
-            <>
-              <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Welcome Back!</h2>
-              {loginError && <p className={errorBoxClass}>{loginError}</p>}
-              <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
-                <div>
-                  <label htmlFor="loginEmail" className={currentLabelClass}>Email Address</label>
-                  <input type="email" id="loginEmail" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="you@example.com" aria-required="true" />
-                </div>
-                <div>
-                  <label htmlFor="loginPassword" className={currentLabelClass}>Password</label>
-                  <input type="password" id="loginPassword" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="••••••••" aria-required="true" />
-                </div>
-                <div className="text-right -mt-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    className={`text-xs sm:text-sm font-medium transition-colors ${
-                      theme === 'dark'
-                        ? 'text-primary-400 hover:text-primary-300'
-                        : 'text-primary-600 hover:text-primary-700'
-                    } focus:outline-none focus:underline`}
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-                <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={loginLoading}>
-                  {loginLoading ? 'Logging in...' : 'Login'}
-                </button>
-              </form>
-            </>
-          )}
-
-          {activeTab === 'signup' && (
-            <>
-              <h2 className={`text-xl sm:text-2xl font-bold text-center mb-6 ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-800'}`}>Create Admin Account & Organization</h2>
-              {signupError && <p className={errorBoxClass}>{signupError}</p>}
-              <form onSubmit={handleSignup} className="space-y-4 sm:space-y-5">
-                <div>
-                  <label htmlFor="signupName" className={currentLabelClass}>Your Full Name (Admin)</label>
-                  <input type="text" id="signupName" value={signupName} onChange={(e) => setSignupName(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Your Name" aria-required="true" />
-                </div>
-                <div>
-                  <label htmlFor="signupOrganizationName" className={currentLabelClass}>Organization Name</label>
-                  <input type="text" id="signupOrganizationName" value={signupOrganizationName} onChange={(e) => setSignupOrganizationName(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Your Company or Team Name" aria-required="true" />
-                </div>
-                <div>
-                  <label htmlFor="signupEmail" className={currentLabelClass}>Your Email Address (Admin)</label>
-                  <input type="email" id="signupEmail" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="you@example.com" aria-required="true" />
-                </div>
-                <div>
-                  <label htmlFor="signupPassword" className={currentLabelClass}>Password (Admin)</label>
-                  <input type="password" id="signupPassword" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} className={`${inputBaseClass} ${currentInputClass}`} placeholder="Min. 6 characters" aria-required="true" />
-                </div>
-                {/* <div>
-                  <label htmlFor="signupAvatar" className={currentLabelClass}>Profile Picture (Optional, &lt;2MB)</label>
-                  <input type="file" id="signupAvatar" onChange={handleAvatarChange} accept="image/png, image/jpeg, image/gif" className={`block w-full text-xs sm:text-sm file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold ${theme === 'dark' ? 'text-neutral-400 file:bg-primary-600 file:text-white hover:file:bg-primary-700' : 'text-neutral-600 file:bg-primary-100 file:text-primary-700 hover:file:bg-primary-200'}`} />
-                  {signupAvatarPreview && <img src={signupAvatarPreview} alt="Avatar preview" className="mt-3 w-20 h-20 rounded-full object-cover mx-auto shadow-md" />}
-                </div> */}
-                <button type="submit" className={`${buttonBaseClass} ${currentButtonClass}`} disabled={signupLoading}>
-                  {signupLoading ? 'Creating Account...' : 'Create Account & Organization'}
-                </button>
-              </form>
-            </>
-          )}
-        </div>
+        {isResetMode ? <PasswordResetForm /> : <AuthForms />}
       </div>
+
        <p className={`mt-6 sm:mt-8 text-xs text-center ${theme === 'dark' ? 'text-neutral-500' : 'text-neutral-400'}`}>
         Securely powered by Supabase. &copy; {new Date().getFullYear()} {APP_TITLE}
       </p>
