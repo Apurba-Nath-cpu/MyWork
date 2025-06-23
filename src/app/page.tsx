@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import type { DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import type { DropResult, ProjectColumn, Task } from '../types'; 
@@ -37,7 +37,8 @@ const HomePage: React.FC = () => {
     editingTask,
     confirmationModalState,
     hideConfirmationModal,
-    handleConfirmDeletion
+    handleConfirmDeletion,
+    searchTerm,
   } = useData();
 
   useEffect(() => {
@@ -45,6 +46,49 @@ const HomePage: React.FC = () => {
       fetchBoardData();
     }
   }, [currentUser, loadingAuth, fetchBoardData]);
+  
+  const filteredBoardData = useMemo(() => {
+    if (!boardData) return null;
+    if (!searchTerm) return boardData;
+
+    const lowercasedTerm = searchTerm.toLowerCase();
+
+    const filteredProjects: Record<string, ProjectColumn> = {};
+    const filteredProjectOrder: string[] = [];
+
+    boardData.projectOrder.forEach(projectId => {
+        const project = boardData.projects[projectId];
+        if (!project) return;
+        
+        const projectTitleMatches = project.title.toLowerCase().includes(lowercasedTerm);
+        
+        const matchingTasksInProject = project.taskIds.filter(taskId => {
+            const task = boardData.tasks[taskId];
+            return task && task.title.toLowerCase().includes(lowercasedTerm);
+        });
+
+        if (projectTitleMatches) {
+            // If project title matches, include it and all its tasks
+            filteredProjects[project.id] = { ...project }; 
+            filteredProjectOrder.push(project.id);
+        } else if (matchingTasksInProject.length > 0) {
+            // If only tasks match, add project but with only matching tasks
+            filteredProjects[project.id] = {
+                ...project,
+                taskIds: matchingTasksInProject,
+            };
+            filteredProjectOrder.push(project.id);
+        }
+    });
+    
+    return {
+        tasks: boardData.tasks,
+        projects: filteredProjects,
+        projectOrder: filteredProjectOrder,
+    };
+
+  }, [boardData, searchTerm]);
+
 
   const onDragEnd = useCallback((result: DropResult) => {
     if (!currentUser) {
@@ -117,7 +161,7 @@ const HomePage: React.FC = () => {
     return <AuthScreen />; 
   }
 
-  if (!boardData) {
+  if (!filteredBoardData) {
     return (
       <div className={`flex flex-col h-screen font-sans ${theme} bg-background text-foreground`}>
         <Navbar />
@@ -148,13 +192,13 @@ const HomePage: React.FC = () => {
                 ref={provided.innerRef}
                 className={`flex w-max space-x-4 items-start p-2 ${snapshot.isDraggingOver ? 'bg-neutral-200 dark:bg-neutral-800' : ''}`}
               >
-                {boardData.projectOrder.map((projectId: string, index: number) => {
-                  const project: ProjectColumn | undefined = boardData.projects[projectId];
+                {filteredBoardData.projectOrder.map((projectId: string, index: number) => {
+                  const project: ProjectColumn | undefined = filteredBoardData.projects[projectId];
                   if (!project) {
                     return null; 
                   }
                   const tasks: Task[] = project.taskIds
-                    .map((taskId: string): Task | undefined => boardData.tasks[taskId])
+                    .map((taskId: string): Task | undefined => boardData.tasks[taskId]) // Use original boardData for full task info
                     .filter((task?: Task): task is Task => !!task); 
                   
                   return (
@@ -167,6 +211,12 @@ const HomePage: React.FC = () => {
                   );
                 })}
                 {provided.placeholder}
+                {boardData && boardData.projectOrder.length > 0 && filteredBoardData.projectOrder.length === 0 && (
+                    <div className="p-8 text-center text-neutral-500 dark:text-neutral-400">
+                        <h3 className="text-lg font-semibold">No results found</h3>
+                        <p>Try adjusting your search term.</p>
+                    </div>
+                )}
               </div>
             )}
           </Droppable>

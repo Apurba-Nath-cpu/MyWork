@@ -20,6 +20,7 @@ import {
   Circle,
   Clock,
   UserCog,
+  Search,
 } from 'lucide-react';
 
 // Re-exporting lucide-react icons with the names previously used by custom SVGs
@@ -43,3 +44,4 @@ export const CheckCircleIcon = CheckCircle2;
 export const CircleIcon = Circle;
 export const ClockIcon = Clock;
 export const UserCogIcon = UserCog;
+export const SearchIcon = Search;

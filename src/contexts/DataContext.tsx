@@ -48,6 +48,9 @@ interface DataContextType {
 
   requestProjectDeletion: (projectId: string) => void;
   requestTaskDeletion: (taskId: string, projectId: string) => void;
+
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -64,6 +67,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showManageAccessModal, setShowManageAccessModalState] = useState(false);
   const [editingProject, setEditingProjectState] = useState<ProjectColumn | null>(null);
   const [editingTask, setEditingTaskState] = useState<Task | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   const initialConfirmationState: ConfirmationModalState = {
     isOpen: false,
@@ -380,7 +384,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       showCreateUserModal, setShowCreateUserModal, showManageAccessModal, setShowManageAccessModal,
       editingProject, setEditingProject, editingTask, setEditingTask,
       confirmationModalState, showConfirmationModal, hideConfirmationModal, handleConfirmDeletion,
-      requestProjectDeletion, requestTaskDeletion
+      requestProjectDeletion, requestTaskDeletion,
+      searchTerm, setSearchTerm
     }}>
       {children}
     </DataContext.Provider>
