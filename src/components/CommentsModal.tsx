@@ -4,7 +4,7 @@ import React, { useState, useEffect, FormEvent, useCallback } from 'react';
 import Modal from './Modal';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Task, Comment, UserRole, ProjectRole } from '../types';
+import { Task, Comment, User, UserRole, ProjectRole } from '../types';
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,7 +20,7 @@ interface CommentsModalProps {
 
 const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
   const { getCommentsForTask, addComment, deleteComment } = useData();
-  const { currentUser } = useAuth();
+  const { currentUser, users } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loadingComments, setLoadingComments] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -72,8 +72,21 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
       }
   };
 
-  const formatRole = (role: UserRole) => {
-    return role.replace(/_/g, ' ').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+  const getRoleForDisplay = (commentingUser: Pick<User, 'id' | 'role'>): string => {
+    if (commentingUser.role === UserRole.ADMIN || commentingUser.role === UserRole.ORG_MAINTAINER) {
+      return commentingUser.role.replace(/_/g, ' ').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+    }
+
+    const fullUser = users.find(u => u.id === commentingUser.id);
+    if (fullUser) {
+        const projectMembership = fullUser.projectMemberships.find(m => m.projectId === task.projectId);
+        if (projectMembership?.role === ProjectRole.MAINTAINER) {
+            return 'Maintainer';
+        }
+    }
+    
+    // Default to 'Member' if not a maintainer or if user not found
+    return 'Member';
   };
 
   const canDeleteComment = (comment: Comment) => {
@@ -132,7 +145,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-card-foreground">{comment.user.name}</p>
-                        <Badge variant="secondary" className="text-xs">{formatRole(comment.user.role)}</Badge>
+                        <Badge variant="secondary" className="text-xs">{getRoleForDisplay(comment.user)}</Badge>
                       </div>
                       <div className="flex items-center space-x-2">
                         <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</p>

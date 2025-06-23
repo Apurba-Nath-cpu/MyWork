@@ -1,6 +1,6 @@
 
 import { createClient, type SupabaseClient, type Session, type User as SupabaseAuthUser, type AuthError as SupabaseAuthError, type PostgrestError as SupabasePostgrestError } from '@supabase/supabase-js';
-import { type BoardData, type ProjectColumn, type Task, type User, UserRole, ProjectRole, TaskStatus, TaskPriority, type Organization, type Comment } from '../types';
+import { type BoardData, type ProjectColumn, type Task, type User, UserRole, ProjectRole, TaskStatus, TaskPriority, type Organization, type Comment, type ProjectMembership } from '../types';
 import type { SignUpError, CreateUserAccountError } from '../types'; // Use extended types
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -368,22 +368,52 @@ export const createUserAccount = async (id: string, name: string, email: string,
 
 export const getUsers = async (organizationId: string): Promise<User[]> => {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  const { data: usersData, error: usersError } = await supabase
     .from('users')
     .select('id, name, email, role, avatar_url, organization_id')
     .eq('organization_id', organizationId)
     .order('name');
-  if (error) {
+  
+  if (usersError) {
     return [];
   }
-  return (data || []).map(d => ({
+  if (!usersData) return [];
+
+  // Fetch all project memberships for the users in the organization
+  const userIds = usersData.map(u => u.id);
+  const { data: membershipsData, error: membershipsError } = await supabase
+    .from('project_members')
+    .select('user_id, project_id, role')
+    .in('user_id', userIds);
+
+  if (membershipsError) {
+    // Fail gracefully, return users without memberships.
+    return usersData.map(d => ({
+        id: d.id,
+        name: d.name,
+        email: d.email,
+        role: d.role as UserRole,
+        avatarUrl: d.avatar_url,
+        organization_id: d.organization_id,
+        projectMemberships: [],
+    }));
+  }
+
+  const membershipsByUserId = new Map<string, ProjectMembership[]>();
+  (membershipsData || []).forEach(m => {
+    const userMemberships = membershipsByUserId.get(m.user_id) || [];
+    userMemberships.push({ projectId: m.project_id, role: m.role as ProjectRole });
+    membershipsByUserId.set(m.user_id, userMemberships);
+  });
+
+  return (usersData || []).map(d => ({
       id: d.id,
       name: d.name,
       email: d.email,
       role: d.role as UserRole,
       avatarUrl: d.avatar_url,
       organization_id: d.organization_id,
-      projectMemberships: [], // Note: This doesn't fetch project memberships for the whole list
+      projectMemberships: membershipsByUserId.get(d.id) || [],
   }));
 };
 
