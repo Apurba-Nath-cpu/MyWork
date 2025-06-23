@@ -791,8 +791,11 @@ export const deleteComment = async (commentId: string): Promise<boolean> => {
 
 export const sendPasswordResetEmail = async (email: string): Promise<{ error: SupabaseAuthError | null }> => {
   if (!supabase) return { error: createNotConfiguredError('ConfigurationError') as SupabaseAuthError };
+  
+  const redirectTo = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin, 
+    redirectTo: redirectTo, 
   });
   return { error };
 };
