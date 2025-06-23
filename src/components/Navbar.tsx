@@ -1,4 +1,3 @@
-
 "use client";
 import React from 'react';
 import { useTheme, Theme } from '../contexts/ThemeContext';
@@ -57,7 +56,7 @@ const Navbar: React.FC = () => {
                 />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Focus Mode</p>
+                <p>Focus Mode: {isFocusMode ? 'ON' : 'OFF'}</p>
               </TooltipContent>
             </Tooltip>
 
