@@ -28,26 +28,22 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
 
   const canComment = useMemo(() => {
     if (!currentUser) return false;
-
-    // Rule 1: Admin or Org Maintainer can always comment.
+    // Admins and Org Maintainers can always comment
     if ([UserRole.ADMIN, UserRole.ORG_MAINTAINER].includes(currentUser.role)) {
       return true;
     }
-
-    // Rule 2: Any member of the project can comment.
+    // Any member of the project can comment
     const isProjectMember = currentUser.projectMemberships.some(
       (m) => m.projectId === task.projectId
     );
     if (isProjectMember) {
       return true;
     }
-
-    // Rule 3: Any user assigned to the task can comment.
+    // Any user assigned to the task can comment
     const isAssignee = task.assigneeIds.includes(currentUser.id);
     if (isAssignee) {
       return true;
     }
-
     return false;
   }, [currentUser, task]);
 
@@ -144,7 +140,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
 
         <div className="flex-grow overflow-y-auto pr-2 space-y-4">
           {loadingComments ? (
-            <p className="text-sm text-muted-foreground">Loading comments...</p>
+            <p className="text-sm text-muted-foreground text-center py-4">Loading comments...</p>
           ) : comments.length > 0 ? (
             comments.map(comment => {
               const isPrivilegedCommenter = comment.user.role === UserRole.ADMIN || comment.user.role === UserRole.ORG_MAINTAINER;
@@ -175,7 +171,13 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
               )
             })
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No comments yet. Be the first to comment!</p>
+            <div className="text-sm text-muted-foreground text-center py-4">
+              {canComment ? (
+                <p>No comments yet. Be the first to comment!</p>
+              ) : (
+                <p>There are no comments on this task yet.</p>
+              )}
+            </div>
           )}
         </div>
       </div>
