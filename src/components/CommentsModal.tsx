@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import Modal from './Modal';
@@ -41,6 +42,11 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
     if (task.assigneeIds.includes(currentUser.id)) return true;
     return false;
   }, [currentUser, task]);
+  
+  const filteredMentionSuggestions = useMemo(() => {
+    if (!mentionQuery) return users;
+    return users.filter(user => user.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+  }, [mentionQuery, users]);
 
   const fetchAndSetComments = useCallback(async () => {
     setLoadingComments(true);
@@ -176,11 +182,6 @@ const CommentsModal: React.FC<CommentsModalProps> = ({ task, onClose }) => {
         return part;
     });
   };
-  
-  const filteredMentionSuggestions = useMemo(() => {
-    if (!mentionQuery) return users;
-    return users.filter(user => user.name.toLowerCase().includes(mentionQuery.toLowerCase()));
-  }, [mentionQuery, users]);
 
   return (
     <Modal isOpen={true} onClose={onClose} title={`Comments for: ${task.title}`}>
