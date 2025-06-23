@@ -179,6 +179,7 @@ const HomePage: React.FC = () => {
     );
   }
 
+  const noProjectsExist = boardData && boardData.projectOrder.length === 0;
   const showNoResults = boardData && boardData.projectOrder.length > 0 && filteredBoardData.projectOrder.length === 0;
 
   return (
@@ -186,7 +187,14 @@ const HomePage: React.FC = () => {
       <Navbar />
 
       <div className="flex-grow flex flex-col overflow-hidden">
-        {showNoResults ? (
+        {noProjectsExist ? (
+          <div className="flex-grow flex items-center justify-center">
+            <div className="text-center text-neutral-500 dark:text-neutral-400">
+              <h3 className="text-lg font-semibold">No Projects Yet</h3>
+              <p>Create your first project to get started.</p>
+            </div>
+          </div>
+        ) : showNoResults ? (
           <div className="flex-grow flex items-center justify-center">
             <div className="text-center text-neutral-500 dark:text-neutral-400">
               <h3 className="text-lg font-semibold">No results found</h3>
