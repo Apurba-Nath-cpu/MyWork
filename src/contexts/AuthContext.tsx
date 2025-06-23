@@ -160,69 +160,122 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []); // Remove handleSession and toast from dependencies to prevent re-initialization
 
     const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-        const { success, error } = await supabaseService.signInUser(email, password);
-        if (success) {
-            return { success: true };
+        try {
+            const { success, error } = await supabaseService.signInUser(email, password);
+            if (success) {
+                return { success: true };
+            }
+            return { success: false, error: error?.message || "An unknown error occurred." };
+        } catch (err) {
+            console.error("Login error:", err);
+            return { success: false, error: "An unexpected error occurred during login." };
         }
-        return { success: false, error: error?.message || "An unknown error occurred." };
     };
 
     const signUp = async (email: string, password: string, name: string, organizationName: string) => {
-        const { success, error } = await supabaseService.signUpUserAndCreateOrg(email, password, name, organizationName);
-        if (success) {
-            toast({
-                title: "Account Created",
-                description: "Success! Please check your email to confirm your account.",
-            });
-            return { success: true };
-        } else {
+        try {
+            const result = await supabaseService.signUpUserAndCreateOrg(email, password, name, organizationName);
+            
+            if (result.success) {
+                toast({
+                    title: "Account Created",
+                    description: "Success! Please check your email to confirm your account.",
+                });
+                return { success: true };
+            } else {
+                // Safely handle the error object
+                const errorMessage = result.error?.message || "An unknown error occurred during sign up.";
+                const isOrgNameConflict = result.error?.isOrgNameConflict || false;
+                const isEmailConflict = result.error?.isEmailConflict || false;
+                
+                console.error("Sign up error:", result.error);
+                
+                return { 
+                    success: false, 
+                    error: errorMessage, 
+                    isOrgNameConflict, 
+                    isEmailConflict 
+                };
+            }
+        } catch (err) {
+            console.error("Unexpected sign up error:", err);
             return { 
                 success: false, 
-                error: error?.message, 
-                isOrgNameConflict: error?.isOrgNameConflict, 
-                isEmailConflict: error?.isEmailConflict 
+                error: "An unexpected error occurred during sign up.",
+                isOrgNameConflict: false,
+                isEmailConflict: false
             };
         }
     };
 
     const logout = async () => {
-        await supabaseService.signOutUser();
-        router.push('/'); 
+        try {
+            await supabaseService.signOutUser();
+            router.push('/'); 
+        } catch (error) {
+            console.error("Logout error:", error);
+            // Still redirect even if logout fails
+            router.push('/');
+        }
     };
     
     const sendPasswordResetEmail = async (email: string) => {
-        const { error } = await supabaseService.sendPasswordResetEmail(email);
-        if (error) {
+        try {
+            const { error } = await supabaseService.sendPasswordResetEmail(email);
+            if (error) {
+                const errorMessage = error.message || "Failed to send password reset email.";
+                toast({
+                    title: "Error Sending Email",
+                    description: errorMessage,
+                    variant: "destructive",
+                });
+                return { success: false, error: errorMessage };
+            }
+            toast({
+                title: "Password Reset Email Sent",
+                description: "If an account exists, you'll receive reset instructions.",
+            });
+            return { success: true };
+        } catch (err) {
+            console.error("Password reset error:", err);
+            const errorMessage = "An unexpected error occurred while sending the password reset email.";
             toast({
                 title: "Error Sending Email",
-                description: error.message,
+                description: errorMessage,
                 variant: "destructive",
             });
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage };
         }
-        toast({
-            title: "Password Reset Email Sent",
-            description: "If an account exists, you'll receive reset instructions.",
-        });
-        return { success: true };
     };
 
     const updatePassword = async (password: string) => {
-        const { error } = await supabaseService.updateUserPassword(password);
-        if (error) {
+        try {
+            const { error } = await supabaseService.updateUserPassword(password);
+            if (error) {
+                const errorMessage = error.message || "Failed to update password.";
+                toast({
+                    title: "Error Updating Password",
+                    description: errorMessage,
+                    variant: "destructive",
+                });
+                return { success: false, error: errorMessage };
+            }
+            toast({
+                title: "Password Updated",
+                description: "Your password has been changed. Please log in with your new password.",
+            });
+            await logout();
+            return { success: true };
+        } catch (err) {
+            console.error("Update password error:", err);
+            const errorMessage = "An unexpected error occurred while updating the password.";
             toast({
                 title: "Error Updating Password",
-                description: error.message,
+                description: errorMessage,
                 variant: "destructive",
             });
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage };
         }
-        toast({
-            title: "Password Updated",
-            description: "Your password has been changed. Please log in with your new password.",
-        });
-        await logout();
-        return { success: true };
     };
 
     const value: AuthContextType = { 
