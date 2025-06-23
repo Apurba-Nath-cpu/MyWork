@@ -18,6 +18,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { toast } = useToast();
     const router = useRouter();
 
+    useEffect(() => {
+      if (!supabaseService.supabase) {
+        console.error("Supabase client is not initialized. Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your environment.");
+        toast({
+          title: "Application Not Configured",
+          description: "The connection to the backend is not set up. Please check your environment variables.",
+          variant: "destructive",
+          duration: Infinity,
+        });
+        setLoadingAuth(false); // Unblock the UI
+      }
+    }, [toast]);
+
     const fetchPublicUsers = useCallback(async (organizationId: string) => {
         const publicUsers = await supabaseService.getUsers(organizationId);
         setUsers(publicUsers);
@@ -44,54 +57,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return null;
     }, []);
     
-    const handleSession = useCallback(async (session: Session | null) => {
-        if (session?.user) {
-            setSupabaseUser(session.user);
-            const userProfile = await fetchUserProfile(session.user.id);
+    const handleSession = useCallback(async (session: Session) => {
+        setSupabaseUser(session.user);
+        const userProfile = await fetchUserProfile(session.user.id);
 
-            if (userProfile) {
-                setCurrentUser(userProfile);
-                await fetchPublicUsers(userProfile.organization_id);
-            } else {
-                toast({
-                    title: "Login Error",
-                    description: "Could not retrieve your user profile. Please try logging in again or contact support.",
-                    variant: "destructive",
-                });
-                await supabaseService.signOutUser();
-                setCurrentUser(null);
-                setSupabaseUser(null);
-            }
+        if (userProfile) {
+            setCurrentUser(userProfile);
+            await fetchPublicUsers(userProfile.organization_id);
         } else {
-            setCurrentUser(null);
-            setSupabaseUser(null);
+            toast({
+                title: "Login Error",
+                description: "Could not retrieve your user profile. Please try logging in again or contact support.",
+                variant: "destructive",
+            });
+            await supabaseService.signOutUser(); // This will trigger the 'SIGNED_OUT' state in the listener
         }
         setLoadingAuth(false);
     }, [fetchUserProfile, fetchPublicUsers, toast]);
 
-
     useEffect(() => {
-        let recoveryMode = false;
+        if (!supabaseService.supabase) {
+            return;
+        }
 
         const { data: { subscription } } = supabaseService.onAuthStateChange(async (event, session) => {
             if (event === 'PASSWORD_RECOVERY') {
-                recoveryMode = true;
                 setIsResettingPassword(true);
                 setLoadingAuth(false);
                 return;
             }
-            
-            if (recoveryMode) {
-                return; 
-            }
 
-            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-                if (session) {
-                    await handleSession(session);
-                } else {
-                    setLoadingAuth(false);
-                }
-            } else if (event === 'SIGNED_OUT') {
+            if (event === 'SIGNED_IN') {
+                setIsResettingPassword(false);
+            }
+            
+            if (session) {
+                await handleSession(session);
+            } else {
                 setCurrentUser(null);
                 setSupabaseUser(null);
                 setUsers([]);
@@ -108,7 +110,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         const { success, error } = await supabaseService.signInUser(email, password);
         if (success) {
-            // The auth listener ('SIGNED_IN') will handle fetching the profile and setting state.
             return { success: true };
         }
         return { success: false, error: error?.message || "An unknown error occurred." };
@@ -134,7 +135,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const logout = async () => {
         await supabaseService.signOutUser();
-        // The auth listener ('SIGNED_OUT') will clear the state.
         router.push('/'); 
     };
     
@@ -169,7 +169,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             title: "Password Updated",
             description: "Your password has been changed. Please log in with your new password.",
         });
-        // After successful password update, log the user out of the recovery session.
         await logout();
         return { success: true };
     };
