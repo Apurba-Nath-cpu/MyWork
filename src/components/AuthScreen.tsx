@@ -148,10 +148,17 @@ const AuthScreen: React.FC = () => {
 
   const handleForgotPassword = async () => {
     setLoginError(null);
-    const emailToReset = loginEmail || window.prompt("Please enter your email address to receive a password reset link.");
+    const emailToReset = loginEmail;
     
     if (!emailToReset) {
-        return; // User cancelled or field was empty
+      const errorMsg = "Please enter your email in the field above to reset your password.";
+      setLoginError(errorMsg);
+      toast({
+        title: "Email Required",
+        description: errorMsg,
+        variant: "destructive",
+      });
+      return;
     }
 
     if (!validateEmail(emailToReset)) {
@@ -288,3 +295,5 @@ const AuthScreen: React.FC = () => {
 };
 
 export default AuthScreen;
+
+    
