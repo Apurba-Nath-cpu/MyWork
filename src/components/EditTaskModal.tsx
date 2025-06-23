@@ -72,12 +72,18 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
     );
   };
   
-  const filteredUsers = usersForSuggestions
-    .filter(user => user.name.toLowerCase().includes(assigneeSearchTerm.toLowerCase()));
+  const filteredUsers = useMemo(() => {
+    if (!assigneeSearchTerm) {
+      return usersForSuggestions;
+    }
+    return usersForSuggestions.filter(user => 
+      user.name.toLowerCase().includes(assigneeSearchTerm.toLowerCase())
+    );
+  }, [usersForSuggestions, assigneeSearchTerm]);
     
   return (
     <Modal isOpen={!!task} onClose={() => setEditingTask(null)} title={`Edit Task: ${task.title}`}>
-      <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
+      <div className="space-y-4 max-h-[80vh] overflow-y-auto hide-scrollbar">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="editTaskTitle" className="text-neutral-700 dark:text-neutral-300">Task Title</Label>
@@ -119,7 +125,7 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({ task }) => {
           <div>
             <Label className="text-neutral-700 dark:text-neutral-300">Assignees (Optional)</Label>
             <Input placeholder="Search users..." value={assigneeSearchTerm} onChange={(e) => setAssigneeSearchTerm(e.target.value)} className="mb-2" disabled={!canEditTask} />
-            <div className="max-h-40 overflow-y-auto border border-input rounded-md p-2 space-y-1 bg-background">
+            <div className="max-h-40 overflow-y-auto border border-input rounded-md p-2 space-y-1 bg-background hide-scrollbar">
               {filteredUsers.length > 0 ? filteredUsers.map(user => (
                 <div key={user.id} className="flex items-center justify-between p-1 hover:bg-accent hover:text-accent-foreground rounded">
                   <label htmlFor={`edit-assignee-${user.id}`} className="text-sm flex-grow cursor-pointer">{user.name}</label>
