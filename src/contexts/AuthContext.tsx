@@ -26,44 +26,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []); 
 
-  const fetchUserProfileWithTimeout = useCallback(async (userId: string, timeoutMs = 10000): Promise<User | null> => {
-    try {
-      const profilePromise = supabaseService.getUserProfile(userId);
-      const timeoutPromise = new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), timeoutMs)
-      );
-      
-      const userProfile = await Promise.race([profilePromise, timeoutPromise]);
-      return userProfile;
-    } catch (error) {
-      return null;
-    }
-  }, []);
-
-  const handleAuthUserChange = useCallback(async (authUser: SupabaseAuthUser | null, isInitialLoad = false) => {
+  const handleAuthUserChange = useCallback(async (authUser: SupabaseAuthUser | null) => {
     setSupabaseUser(authUser);
     
     if (authUser) {
-      try {
-        if (!isInitialLoad) {
-          // Small delay to allow DB replication after signup
-          await new Promise(res => setTimeout(res, 200));
+      let userProfile: User | null = null;
+      let lastError: Error | null = null;
+
+      // Retry fetching profile a few times to handle potential replication delays on deployment
+      for (let i = 0; i < 3; i++) {
+        try {
+          // Add a small delay, especially for the first attempt right after login/signup
+          await new Promise(res => setTimeout(res, i * 250));
+          userProfile = await supabaseService.getUserProfile(authUser.id);
+          if (userProfile) {
+            lastError = null;
+            break; // Success, exit loop
+          }
+        } catch (error: any) {
+          lastError = error;
         }
+      }
+
+      if (userProfile) {
+        setCurrentUser(userProfile);
+      } else {
+        // If profile is still not found after retries, it's a persistent issue.
+        const description = lastError 
+            ? `There was a problem fetching your profile. This might be a network or permissions issue.`
+            : "Your user profile could not be found after logging in. Please contact support.";
         
-        const userProfile = await fetchUserProfileWithTimeout(authUser.id);
-        
-        if (userProfile) {
-          setCurrentUser(userProfile);
-        } else {
-          // If a supabase user exists but we can't find a profile, it's an inconsistent state.
-          // The user might have been deleted from the users table but not from auth.
-          // The safest thing is to log them out to prevent app errors.
-          await supabaseService.signOutUser();
-          setCurrentUser(null);
-          setSupabaseUser(null);
-        }
-      } catch (error) {
-        // If any error occurs fetching profile, sign out to be safe.
+        toast({ title: "Login Error", description, variant: "destructive" });
         await supabaseService.signOutUser();
         setCurrentUser(null);
         setSupabaseUser(null);
@@ -73,7 +66,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     
     setLoadingAuth(false);
-  }, [fetchUserProfileWithTimeout]);
+  }, [toast]);
   
   useEffect(() => {
   if (typeof window === 'undefined') return;
@@ -114,16 +107,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
       
-      // For all other events
-      await handleAuthUserChange(session?.user ?? null, event === 'INITIAL_SESSION');
-      clearTimeout(loadingTimeout);
-    } catch (error) {
-      console.error('Auth state change error:', error);
-      // Force loading to false on error
-      setLoadingAuth(false);
-      clearTimeout(loadingTimeout);
-    }
-  });
+      // For all other events (INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED)
+      // when not in password recovery mode, run the standard authentication flow.
+      await handleAuthUserChange(session?.user ?? null);
+    });
 
   return () => {
     mounted = false;
