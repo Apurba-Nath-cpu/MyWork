@@ -1,3 +1,4 @@
+
 "use client";
 import React from 'react';
 import { useTheme, Theme } from '../contexts/ThemeContext';
@@ -41,82 +42,119 @@ const Navbar: React.FC = () => {
             className="w-full pl-10 pr-4 py-2 rounded-md bg-neutral-100 dark:bg-neutral-700 border-neutral-300 dark:border-neutral-600 focus:ring-primary-500"
           />
         </div>
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Switch
-                id="focus-mode-switch"
-                checked={isFocusMode}
-                onCheckedChange={setIsFocusMode}
-                aria-label="Toggle Focus Mode"
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Focus Mode</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </div>
 
-      <div className="flex items-center space-x-2 sm:space-x-4">
-        {canCreateProject && (
-            <button
-              onClick={() => setShowAddProjectModal(true)}
-              className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-              title="Create New Project"
-              aria-label="Create New Project"
-            >
-              <PlusCircleIcon className="w-6 h-6" />
-            </button>
-        )}
-        {canCreateUser && (
-            <button
-              onClick={() => setShowCreateUserModal(true)}
-              className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-              title="Create New User"
-              aria-label="Create New User"
-            >
-              <UserPlusIcon className="w-6 h-6" />
-            </button>
-        )}
-        {canManageUsers && (
-             <button
-              onClick={() => setShowManageAccessModal(true)}
-              className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-              title="Manage User Access"
-              aria-label="Manage User Access"
-            >
-              <UserCogIcon className="w-6 h-6" />
-            </button>
-        )}
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-          title={theme === Theme.LIGHT ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-          aria-label={theme === Theme.LIGHT ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-        >
-          {theme === Theme.LIGHT ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
-        </button>
-        {currentUser ? (
-          <div className="flex items-center space-x-2">
-            {currentUser.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-8 h-8 rounded-full object-cover" />
-            ) : (
-                <UserCircleIcon className="w-8 h-8 text-neutral-600 dark:text-neutral-300" />
+      <div className="flex items-center">
+        <TooltipProvider delayDuration={200}>
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Switch
+                  id="focus-mode-switch"
+                  checked={isFocusMode}
+                  onCheckedChange={setIsFocusMode}
+                  aria-label="Toggle Focus Mode"
+                />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Focus Mode</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {canCreateProject && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowAddProjectModal(true)}
+                    className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                    aria-label="Create New Project"
+                  >
+                    <PlusCircleIcon className="w-6 h-6" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Create New Project</p>
+                </TooltipContent>
+              </Tooltip>
             )}
-            <span className="text-sm hidden sm:inline">{currentUser.name} ({currentUser.role.replace('_', ' ')})</span>
-            <button
-              onClick={logout}
-              className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-              title="Logout"
-              aria-label="Logout"
-            >
-              <LogoutIcon className="w-6 h-6" />
-            </button>
+
+            {canCreateUser && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowCreateUserModal(true)}
+                    className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                    aria-label="Create New User"
+                  >
+                    <UserPlusIcon className="w-6 h-6" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Create New User</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {canManageUsers && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowManageAccessModal(true)}
+                    className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                    aria-label="Manage User Access"
+                  >
+                    <UserCogIcon className="w-6 h-6" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Manage User Access</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                  aria-label={theme === Theme.LIGHT ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+                >
+                  {theme === Theme.LIGHT ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{theme === Theme.LIGHT ? 'Switch to Dark Mode' : 'Switch to Light Mode'}</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {currentUser ? (
+              <div className="flex items-center space-x-2">
+                {currentUser.avatarUrl ? (
+                    <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                    <UserCircleIcon className="w-8 h-8 text-neutral-600 dark:text-neutral-300" />
+                )}
+                <span className="text-sm hidden sm:inline">{currentUser.name} ({currentUser.role.replace('_', ' ')})</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={logout}
+                      className="p-2 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                      aria-label="Logout"
+                    >
+                      <LogoutIcon className="w-6 h-6" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Logout</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : (
+              <div className="text-sm text-neutral-500 dark:text-neutral-400"></div>
+            )}
           </div>
-        ) : (
-          <div className="text-sm text-neutral-500 dark:text-neutral-400"></div>
-        )}
+        </TooltipProvider>
       </div>
     </nav>
   );
