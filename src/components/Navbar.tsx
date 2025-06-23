@@ -1,4 +1,3 @@
-
 "use client";
 import React from 'react';
 import { useTheme, Theme } from '../contexts/ThemeContext';
@@ -8,8 +7,8 @@ import { UserRole } from '../types';
 import { SunIcon, MoonIcon, UserCircleIcon, LogoutIcon, PlusCircleIcon, UserPlusIcon, UserCogIcon, SearchIcon } from './custom-icons';
 import { APP_TITLE } from '../lib/constants';
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -42,14 +41,21 @@ const Navbar: React.FC = () => {
             className="w-full pl-10 pr-4 py-2 rounded-md bg-neutral-100 dark:bg-neutral-700 border-neutral-300 dark:border-neutral-600 focus:ring-primary-500"
           />
         </div>
-        <div className="flex items-center space-x-2">
-            <Label htmlFor="focus-mode-switch" className="text-sm font-medium whitespace-nowrap">Focus Mode</Label>
-            <Switch
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Switch
                 id="focus-mode-switch"
                 checked={isFocusMode}
                 onCheckedChange={setIsFocusMode}
-            />
-        </div>
+                aria-label="Toggle Focus Mode"
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Focus Mode</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       <div className="flex items-center space-x-2 sm:space-x-4">
