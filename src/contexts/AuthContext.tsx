@@ -77,9 +77,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
                 // Sign out the user since we can't get their profile
                 await supabaseService.signOutUser();
-                setCurrentUser(null);
-                setSupabaseUser(null);
-                setUsers([]);
                 return; // Don't set loading to false here, let the SIGNED_OUT event handle it
             }
         } catch (error) {
@@ -89,10 +86,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 description: "An error occurred during authentication. Please try again.",
                 variant: "destructive",
             });
-            // Clear state on error
-            setCurrentUser(null);
-            setSupabaseUser(null);
-            setUsers([]);
         } finally {
             setLoadingAuth(false);
         }
