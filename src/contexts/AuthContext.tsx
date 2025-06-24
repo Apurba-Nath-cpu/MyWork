@@ -77,6 +77,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
                 // Sign out the user since we can't get their profile
                 await supabaseService.signOutUser();
+                setCurrentUser(null);
+                setSupabaseUser(null);
+                setUsers([]);
                 return; // Don't set loading to false here, let the SIGNED_OUT event handle it
             }
         } catch (error) {
@@ -86,6 +89,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 description: "An error occurred during authentication. Please try again.",
                 variant: "destructive",
             });
+            // Clear state on error
+            setCurrentUser(null);
+            setSupabaseUser(null);
+            setUsers([]);
         } finally {
             setLoadingAuth(false);
         }
@@ -228,24 +235,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const logout = async () => {
         try {
+            // Set loading state to prevent UI flickering
+            setLoadingAuth(true);
+            
             const { error } = await supabaseService.signOutUser();
             
             if (error) {
                 console.warn("Logout completed with warning:", error);
-                toast({
-                    title: "Logged Out",
-                    description: "You have been logged out successfully.",
-                });
             }
             
+            // Clear the user state immediately
+            setCurrentUser(null);
+            setSupabaseUser(null);
+            setUsers([]);
+            setIsResettingPassword(false);
+            
+            toast({
+                title: "Logged Out",
+                description: "You have been logged out successfully.",
+            });
+            
+            // Navigate after clearing state
             router.push('/'); 
+            
         } catch (error) {
             console.error("Unexpected error during logout:", error);
+            
+            // Even on error, clear the state and navigate
+            setCurrentUser(null);
+            setSupabaseUser(null);
+            setUsers([]);
+            setIsResettingPassword(false);
+            
             toast({
                 title: "Logged Out",
                 description: "You have been logged out.",
             });
             router.push('/');
+        } finally {
+            setLoadingAuth(false);
         }
     };
     
