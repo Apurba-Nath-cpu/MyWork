@@ -38,7 +38,7 @@ export const signUpUserAndCreateOrg = async (
     .eq('name', organizationName)
     .maybeSingle();
 
-  if (existingOrgQueryError && existingOrgQueryError.code !== 'PGRST116') { // PGRST116 is 'Row not found'
+  if (existingOrgQueryError && existingOrgQueryError.code !== 'PGRST116') {
     return { 
         success: false, 
         error: { name: "OrgQueryError", message: existingOrgQueryError.message } as SignUpError, 
@@ -82,64 +82,105 @@ export const signUpUserAndCreateOrg = async (
   }
   const authUser = authData.user;
 
-  // Step 2: Create Organization
-  const { data: orgData, error: orgError } = await supabase
-    .from('organizations')
-    .insert({ name: organizationName, admin_id: authUser.id })
-    .select('id')
-    .single();
+  try {
+    // Step 2: Create Organization
+    const { data: orgData, error: orgError } = await supabase
+      .from('organizations')
+      .insert({ name: organizationName, admin_id: authUser.id })
+      .select('id')
+      .single();
 
-  if (orgError || !orgData) {
-    // If org creation fails (e.g. race condition on name if DB constraint is set), report it
-     const finalError: SignUpError = { 
-        name: "OrganizationCreationError", 
-        message: orgError?.message || "Failed to create organization.",
-        isOrgNameConflict: orgError?.code === '23505' // PostgreSQL unique violation code
-    };
-    return { success: false, error: finalError, user: authUser };
-  }
-  const organizationId = orgData.id;
-
-  // Step 3: Upload avatar if provided
-  let avatarPublicUrl: string | undefined = undefined;
-  if (avatarFile) {
-    const fileExt = avatarFile.name.split('.').pop();
-    const fileName = `${authUser.id}.${fileExt}`; 
-    const filePath = `avatars/${fileName}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('avatars') 
-      .upload(filePath, avatarFile, { cacheControl: '3600', upsert: true });
-
-    if (!uploadError) {
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      avatarPublicUrl = publicUrlData?.publicUrl;
+    if (orgError || !orgData) {
+      const finalError: SignUpError = { 
+          name: "OrganizationCreationError", 
+          message: orgError?.message || "Failed to create organization.",
+          isOrgNameConflict: orgError?.code === '23505'
+      };
+      return { success: false, error: finalError, user: authUser };
     }
-  }
+    const organizationId = orgData.id;
 
-  // Step 4: Create corresponding profile in public.users table, linking to organization
-  const { error: profileError } = await supabase
-    .from('users')
-    .insert([{ 
-      id: authUser.id, 
-      name, 
-      email: authUser.email, 
-      role: UserRole.ADMIN, 
-      avatar_url: avatarPublicUrl,
-      organization_id: organizationId
-    }]);
+    // Step 3: Upload avatar if provided
+    let avatarPublicUrl: string | undefined = undefined;
+    if (avatarFile) {
+      const fileExt = avatarFile.name.split('.').pop();
+      const fileName = `${authUser.id}.${fileExt}`; 
+      const filePath = `avatars/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('avatars') 
+        .upload(filePath, avatarFile, { cacheControl: '3600', upsert: true });
 
-  if (profileError) {
-    const signUpError: SignUpError = {
-        message: profileError.message || "Failed to create user profile.",
-        name: "ProfileCreationError",
-        status: (profileError as SupabasePostgrestError).code ? parseInt((profileError as SupabasePostgrestError).code) : undefined,
-        isEmailConflict: (profileError as SupabasePostgrestError).code === '23505', // Check if it's a unique constraint violation on email
-    } as SignUpError;
-    return { success: false, error: signUpError, user: authUser };
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        avatarPublicUrl = publicUrlData?.publicUrl;
+      }
+    }
+
+    // Step 4: Create corresponding profile in public.users table, linking to organization
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert([{ 
+        id: authUser.id, 
+        name, 
+        email: authUser.email, 
+        role: UserRole.ADMIN, 
+        avatar_url: avatarPublicUrl,
+        organization_id: organizationId
+      }]);
+
+    if (profileError) {
+      const signUpError: SignUpError = {
+          message: profileError.message || "Failed to create user profile.",
+          name: "ProfileCreationError",
+          status: (profileError as SupabasePostgrestError).code ? parseInt((profileError as SupabasePostgrestError).code) : undefined,
+          isEmailConflict: (profileError as SupabasePostgrestError).code === '23505',
+      } as SignUpError;
+      return { success: false, error: signUpError, user: authUser };
+    }
+    
+    // Step 5: Verify the profile was created successfully
+    let profileVerified = false;
+    for (let i = 0; i < 5; i++) {
+      const { data: verifyProfile } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', authUser.id)
+        .single();
+      
+      if (verifyProfile) {
+        profileVerified = true;
+        break;
+      }
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    if (!profileVerified) {
+      return { 
+        success: false, 
+        error: { 
+          name: "ProfileVerificationError", 
+          message: "Profile creation could not be verified." 
+        } as SignUpError, 
+        user: authUser 
+      };
+    }
+    
+    return { success: true, error: null, user: authUser };
+    
+  } catch (error) {
+    console.error('Error in signup process:', error);
+    return { 
+      success: false, 
+      error: { 
+        name: "UnexpectedError", 
+        message: "An unexpected error occurred during account creation." 
+      } as SignUpError, 
+      user: authUser 
+    };
   }
-  
-  return { success: true, error: null, user: authUser };
 };
 
 export const signUpUser = async (
@@ -194,7 +235,13 @@ export const signOutUser = async (): Promise<{ error: SupabaseAuthError | null }
   
   try {
     // First, try to get the current session to see if we're actually logged in
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.warn("Error getting session during logout:", sessionError);
+      // If we can't get the session, consider it already logged out
+      return { error: null };
+    }
     
     if (!session) {
       // No active session, consider this a successful logout
@@ -208,12 +255,13 @@ export const signOutUser = async (): Promise<{ error: SupabaseAuthError | null }
     if (error) {
       console.error("Logout error:", error);
       
-      // If it's a 403 or session-related error, we might want to consider it "successful"
-      // since the user is effectively logged out
-      if (error.message?.includes('403') || 
+      // Handle specific error cases where we should consider logout successful
+      if (error.message?.includes('Auth session missing') ||
+          error.message?.includes('403') || 
           error.message?.includes('Forbidden') ||
           error.message?.includes('session') ||
-          error.message?.includes('invalid')) {
+          error.message?.includes('invalid') ||
+          error.name === 'AuthSessionMissingError') {
         console.log("Session was already invalid, considering logout successful");
         return { error: null };
       }
@@ -224,7 +272,16 @@ export const signOutUser = async (): Promise<{ error: SupabaseAuthError | null }
     return { error: null };
   } catch (e) {
     console.error("Unexpected error during logout:", e);
-    // Even if there's an unexpected error, we'll consider the logout successful
+    
+    // Check if it's the specific AuthSessionMissingError
+    if (e instanceof Error && 
+        (e.message?.includes('Auth session missing') || 
+         e.name === 'AuthSessionMissingError')) {
+      console.log("Auth session was already missing, considering logout successful");
+      return { error: null };
+    }
+    
+    // For other unexpected errors, we'll still consider the logout successful
     // since the user's intent is to be logged out
     return { error: null };
   }
