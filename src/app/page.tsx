@@ -46,16 +46,25 @@ const HomePage: React.FC = () => {
 
   // Add a state to track how long we've been loading
   const [loadingDuration, setLoadingDuration] = useState(0);
+  const [forceShowApp, setForceShowApp] = useState(false);
 
   useEffect(() => {
     if (loadingAuth) {
       const interval = setInterval(() => {
-        setLoadingDuration(prev => prev + 1);
+        setLoadingDuration(prev => {
+          const newDuration = prev + 1;
+          // After 10 seconds, offer to force show the app
+          if (newDuration >= 10) {
+            setForceShowApp(true);
+          }
+          return newDuration;
+        });
       }, 1000);
       
       return () => clearInterval(interval);
     } else {
       setLoadingDuration(0);
+      setForceShowApp(false);
     }
   }, [loadingAuth]);
 
